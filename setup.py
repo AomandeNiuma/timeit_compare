@@ -18,7 +18,7 @@ setup(
     author_email='23S112099@stu.hit.edu.cn',
     maintainer='Liu Wei',
     maintainer_email='23S112099@stu.hit.edu.cn',
-    url='',
+    url='https://github.com/AomandeNiuma/timeit_compare',
     classifiers=[
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',

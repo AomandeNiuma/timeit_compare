@@ -93,7 +93,8 @@ compare(sum1, sum2, sum3, sum4, sum5)
 
 you can easily get the results like:
 
-[![output_example.png](./output_example.png)](./output_example.png)
+[![output_example.png](https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)](
+https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)
 
 The output provides detailed results, including the mean, median, minimum, 
 maximum and standard deviation of each function's running time.
