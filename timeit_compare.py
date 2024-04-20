@@ -11,8 +11,8 @@ In-Script usage:
 See parameters in the function compare.
 
 Command line usage:
-    python -m timeit_compare.py [-s] [-n] [-r] [--sort-by] [--reverse] [-d]
-        [-h] [--] [statements]
+    python -m timeit_compare [-s] [-n] [-r] [--sort-by] [--reverse] [-d] [-h]
+        [--] [statements ...]
 
 See options in the function main.
 
@@ -486,7 +486,7 @@ def _print_table(number, title, header, header_cols, body, note):
 def main() -> None:
     """
 Usage:
-  python timeit_compare.py [-s] [-n] [-r] [--sort-by] [--reverse] [-d] [-h] [--] [statements ...]
+  python -m timeit_compare [-s] [-n] [-r] [--sort-by] [--reverse] [-d] [-h] [--] [statements ...]
 
 Options:
   -s, --setup       default setup for each statement (default 'pass').
