@@ -2,11 +2,38 @@
 A method based on timeit that can help you to call timeit.timeit for several
 statements and provide comparison results.
 
-Function 'compare' only.
+In-Script usage:
+    from timeit_compare import compare
+
+    compare(*stmts[, setup][, globals][, number][, repeat][, sort_by]
+        [, reverse][, decimal])
+
+See parameters in the function compare.
+
+Command line usage:
+    python -m timeit_compare.py [-s] [-n] [-r] [--sort-by] [--reverse] [-d]
+        [-h] [--] [statements]
+
+See options in the function main.
+
+Note that if an error occurs during the operation of a statement, the
+program will stop timing this statement, display the error type in the
+error cell of the final results, and then continue to time other statements
+without errors.
+
+If you actively terminate the program, all statements immediately stop
+timing and output the results obtained before the program terminates.
+
+To ensure a good user experience, the output terminal should utilize a font
+that has a fixed width and supports unicode characters. Additionally, it
+should refrain from automatically wrapping text to a new line when it
+becomes excessively long. The default output terminal in PyCharm is a good
+example.
 """
 
-from timeit import Timer, default_timer
-from typing import Callable, Union
+from time import perf_counter
+from timeit import Timer
+from typing import Sequence, Callable, Union
 
 __all__ = ['compare']
 
@@ -14,13 +41,12 @@ __all__ = ['compare']
 class _TimerTask:
     """Internal class."""
 
-    def __init__(self, index, stmt, setup, number):
+    def __init__(self, index, stmt, setup, globals):
         self.index = index
         self.stmt = stmt
-        self.number = number
 
         try:
-            timer = Timer(stmt, setup)
+            timer = Timer(stmt, setup, perf_counter, globals)
         except Exception as e:
             timer = None
             error = type(e)
@@ -32,16 +58,36 @@ class _TimerTask:
         self.time = []
         self.repeat = 0
 
-    def timeit(self):
+    def autorange_timeit(self, number):
         if self.error is None:
             try:
-                time = self.timer.timeit(self.number)
+                time = self.timer.timeit(number)
+            except Exception as e:
+                self.error = type(e)
+            else:
+                return time
+
+    def autorange_interrupt(self, e):
+        if self.error is None:
+            self.error = type(e)
+
+    def timeit(self, number):
+        if self.error is None:
+            try:
+                time = self.timer.timeit(number)
             except Exception as e:
                 self.error = type(e)
                 return True
             else:
-                self.time.append(time)
+                self.time.append(time / number)
                 self.repeat += 1
+        return False
+
+    def interrupt(self, e, repeat):
+        if self.error is None:
+            if self.repeat < repeat:
+                self.error = type(e)
+                return True
         return False
 
     def analyse(self):
@@ -81,8 +127,9 @@ class _TimerTask:
         self.median_percent = median_percent
 
     _null = '--'
+    _units = (('s', 1.0), ('ms', 1e-3), ('μs', 1e-6), ('ns', 1e-9))
 
-    def get_line(self, decimal):
+    def get_line(self, decimal, repeat):
         index = f'{self.index}'
 
         if isinstance(self.stmt, str):
@@ -96,33 +143,40 @@ class _TimerTask:
         else:
             stmt = self._null
 
-        repeat = f'{self.repeat}'
-
         if self.time:
-            mean = f'{self.mean:.{decimal}f}s'
+            for unit, scale in self._units:
+                if self.min >= scale:
+                    break
+
+            def format_time(second):
+                return f'{second / scale:.{decimal}f}'
+
+            mean = format_time(self.mean)
             mean_percent = f'{self.mean_percent:.2%}'
             mean_process = _get_process(self.mean_percent, 8)
 
-            median = f'{self.median:.{decimal}f}s'
+            median = format_time(self.median)
             median_percent = f'{self.median_percent:.2%}'
             median_process = _get_process(self.median_percent, 8)
 
-            min_ = f'{self.min:.{decimal}f}s'
-            max_ = f'{self.max:.{decimal}f}s'
-            std = f'{self.std:.{decimal}f}'
+            min_ = format_time(self.min)
+            max_ = format_time(self.max)
+            std = format_time(self.std)
 
         else:
-            mean = mean_percent = mean_process = \
+            unit = mean = mean_percent = mean_process = \
                 median = median_percent = median_process = \
                 min_ = max_ = std = self._null
 
         if self.error is not None:
             error = self.error.__name__
+            if self.repeat < repeat:
+                error = f'{error}(r={self.repeat})'
         else:
             error = self._null
 
         return [
-            index, stmt, repeat,
+            index, stmt, unit,
             mean, mean_percent, mean_process,
             median, median_percent, median_process,
             min_, max_, std,
@@ -131,89 +185,133 @@ class _TimerTask:
 
 
 def compare(
-        *stmts: Union[str, Callable],
-        setup: str = 'pass',
-        number: int = 100_000,
-        repeat: int = 10,
+        *stmts: Union[Sequence, str, Callable],
+        setup: Union[str, Callable] = 'pass',
+        globals: dict = None,
+        number: int = 0,
+        repeat: int = 5,
         sort_by: str = 'mean',
         reverse: bool = False,
-        decimal: int = 4
+        decimal: int = 3
 ) -> None:
     """
     Call timeit.timeit for several statements and provide comparison results.
 
-    :param stmts: several statements to be compared,
-    :param setup: setup statement,
-    :param number: number of times per repetition,
-    :param repeat: number of repetitions,
+    :param stmts: (statement, setup, globals) or a single statement to be
+        compared.
+    :param setup: default setup for each statement (default 'pass').
+    :param globals: default globals for each statement (default globals()).
+    :param number: number of loops per repetition (default: see below).
+    :param repeat: number of repetitions (default 5).
     :param sort_by: the basis for sorting the results, which can be 'index',
-        'mean'(default), 'median', 'min', 'max' or 'std',
-    :param reverse: set True to sort the results in descending order,
-    :param: decimal: number of decimal places reserved for results,
-    :returns: None.
+        'mean', 'median', 'min', 'max' or 'std' (default 'mean').
+    :param reverse: set True to sort the results in descending order (default
+        False).
+    :param decimal: number of decimal places reserved for results (default 3).
+    :returns: None
 
-    Note that if an error occurs during the operation of a statement, the
-    program will stop timing this statement, display the error type in the
-    error cell of the final results, and then continue to time other statements
-    without errors.
-
-    If you actively terminate the program, all statements immediately stop
-    timing and output the results obtained before the program terminates.
-
-    To ensure a good user experience, the output terminal should utilize a font
-    that has a fixed width and supports unicode characters. Additionally, it
-    should refrain from automatically wrapping text to a new line when it
-    becomes excessively long. The default output terminal in PyCharm is a good
-    example.
+    If number is not given or is less than or equal to 0, it defaults to a
+    value that makes the total running time not too long. You can intentionally
+    set it to a higher value to make the results more accurate.
     """
 
-    start = default_timer()
+    start = perf_counter()
+
+    timer_args = []
+
+    for stmt in stmts:
+        if isinstance(stmt, Sequence) and not isinstance(stmt, str):
+            if len(stmt) > 3:
+                raise ValueError(f'stmt expected at most 3 argument, '
+                                 f'got {len(stmt)}')
+            args = ['pass', setup, globals]
+            for i, j in enumerate(stmt):
+                if j is not None:
+                    args[i] = j
+        else:
+            args = stmt, setup, globals
+
+        timer_args.append(args)
+
+    if not isinstance(number, int):
+        raise TypeError(f'number must be a integer, not {type(number)}')
+    if number < 0:
+        number = 0
 
     if not isinstance(repeat, int):
         raise TypeError(f'repeat must be a integer, not {type(repeat)}')
+    if repeat <= 0:
+        repeat = 1
 
     if not isinstance(sort_by, str):
         raise TypeError(f'sort_by must be a string, not {type(sort_by)}')
-
     sort_by = sort_by.lower()
-
     if sort_by not in {'index', 'mean', 'median', 'min', 'max', 'std'}:
         raise ValueError(
             f'sort_by must be index, mean, median, min, max or '
             f'std, not {sort_by}')
 
+    try:
+        reverse = bool(reverse)
+    except:
+        raise TypeError(f'reverse must be a boolean, not {type(reverse)}')
+
     if not isinstance(decimal, int):
         raise TypeError(f'decimal must be a integer, not {type(decimal)}')
-
     if decimal < 0:
-        raise ValueError(f'decimal must be greater than 0')
+        decimal = 0
 
-    task = [_TimerTask(index, stmt, setup, number) for index, stmt in
-            enumerate(stmts)]
+    # ________________________________________________________________________
+
+    task = [_TimerTask(index, *args) for index, args in enumerate(timer_args)]
+
+    print('timing now...')
+
+    if number == 0:
+        def autorange():
+            i = 1
+            while True:
+                for j in 1, 2, 5:
+                    number = i * j
+                    time_taken = 0.0
+                    all_error = True
+                    for item in task:
+                        time = item.autorange_timeit(number)
+                        if time is not None:
+                            time_taken += time
+                            all_error = False
+                    if all_error:
+                        return 0
+                    if time_taken > 0.2:
+                        return number
+                i *= 10
+
+        try:
+            number = autorange()
+        except (KeyboardInterrupt, SystemExit) as e:
+            for item in task:
+                item.autorange_interrupt(e)
+
     task_num = len(task)
     total_repeat = task_num * repeat
     complete = 0
     error = sum(item.error is not None for item in task)
-
-    print('timing now...')
     _update_process(complete, total_repeat, error, task_num)
 
     try:
         for _ in range(repeat):
             for item in task:
-                e = item.timeit()
-                if e:
+                turn_error = item.timeit(number)
+                if turn_error:
                     error += 1
                 complete += 1
                 _update_process(complete, total_repeat, error, task_num)
 
     except (KeyboardInterrupt, SystemExit) as e:
-        error_type = type(e)
         for item in task:
-            if item.error is None:
-                if item.repeat < repeat:
-                    item.error = error_type
-                    error += 1
+            turn_error = item.interrupt(e, repeat)
+            if turn_error:
+                error += 1
         complete = total_repeat
         _update_process(complete, total_repeat, error, task_num)
 
@@ -239,9 +337,11 @@ def compare(
     result.sort(key=lambda item: getattr(item, sort_by), reverse=reverse)
     result.extend(item for item in task if not item.time)
 
+    # ________________________________________________________________________
+
     # make table
     title = 'Comparison Results'
-    header = ['Index', 'Stmt', 'Repeat', 'Mean', 'Median', 'Min-Max', 'Std',
+    header = ['Index', 'Stmt', 'Unit', 'Mean', 'Median', 'Min-Max', 'Std',
               'Error']
     sort_by_tip = '(SortBy)'
     if sort_by == 'index':
@@ -257,11 +357,12 @@ def compare(
     else:  # sort_by == 'std'
         header[6] += sort_by_tip
     header_cols = [1, 1, 1, 3, 3, 2, 1, 1]
-    body = [task.get_line(decimal) for task in result]
-    note = f'{number:_} loops per repetition'
+    body = [task.get_line(decimal, repeat) for task in result]
+    note = (f"{repeat} repetition{'s' if repeat != 1 else ''}, "
+            f"{number:_} loop{'s' if number != 1 else ''} each.")
     _print_table(1, title, header, header_cols, body, note)
 
-    end = default_timer()
+    end = perf_counter()
     print(f'finish at {end - start:.4f}s')
 
 
@@ -355,22 +456,15 @@ def _print_table(number, title, header, header_cols, body, note):
 
     top_border = f"{dl}╭{'┬'.join('─' * hw for hw in header_width)}╮{dr}"
     bottom_border = f"{dl}╰{'┴'.join('─' * bw for bw in body_width)}╯{dr}"
-
     split_border = []
-    i = 0
+    bw = iter(body_width)
     for col in header_cols:
         if col == 1:
-            bw = body_width[i]
-            split_border.append('─' * bw)
-            split_border.append('┼')
+            border = '─' * next(bw)
         else:
-            for bw in body_width[i: i + col]:
-                split_border.append('─' * bw)
-                split_border.append('┬')
-            split_border[-1] = '┼'
-        i += col
-    split_border.pop()
-    split_border = f"{dl}├{''.join(split_border)}┤{dr}"
+            border = '┬'.join('─' * next(bw) for _ in range(col))
+        split_border.append(border)
+    split_border = f"{dl}├{'┼'.join(split_border)}┤{dr}"
 
     lines = [title_line, top_border, header_line, split_border]
     lines.extend([body_line] * len(body))
@@ -389,21 +483,80 @@ def _print_table(number, title, header, header_cols, body, note):
     print('\n', table_string, '\n', sep='')
 
 
-if __name__ == '__main__':
-    # Compare the running time of initialization methods
-    # for several built-in data types
+def main() -> None:
+    """
+Usage:
+  python timeit_compare.py [-s] [-n] [-r] [--sort-by] [--reverse] [-d] [-h] [--] [statements ...]
+
+Options:
+  -s, --setup       default setup for each statement (default 'pass').
+  -n, --number      number of loops per repetition (default: see below).
+  -r, --repeat      number of repetitions (default 5).
+  --sort-by         the basis for sorting the results, which can be 'index', 'mean', 'median', 'min', 'max' or 'std' (default 'mean').
+  --reverse         set to sort the results in descending order (default False).
+  -d, --decimal     number of decimal places reserved for results (default 3).
+  -h, --help        print this usage message and exit.
+  --                separate options from statement, use when statement starts with -.
+  statements        'statement#setup' or a single statement to be compared.
+
+If -n is not given or is less than or equal to 0, it defaults to a value that makes the total running time not too long. You can intentionally set it to a higher value to make the results more accurate.
+    """
+    import sys
+    args = sys.argv[1:]
+
+    import getopt
+    try:
+        opts, args = getopt.getopt(
+            args, 's:n:r:d:h',
+            ['setup=', 'number=', 'repeat=', 'sort-by=', 'reverse',
+             'decimal=', 'help'])
+    except getopt.error as e:
+        error = str(e)
+    else:
+        error = None
+    if error is not None:
+        raise getopt.error(f'{error}\nuse -h/--help for command line help')
+
+    stmts = [a.split('#', 1) for a in args]
+    setup = []
+    globals = None
+    number = 0
+    repeat = 5
+    sort_by = 'mean'
+    reverse = False
+    decimal = 3
+    for k, v in opts:
+        if k in ('-s', '--setup'):
+            setup.append(v)
+        elif k in ('-n', '--number'):
+            number = int(v)
+        elif k in ('-r', '--repeat'):
+            repeat = int(v)
+        elif k == '--sort-by':
+            sort_by = v
+        elif k == '--reverse':
+            reverse = True
+        elif k in ('-d', '--decimal'):
+            decimal = int(v)
+        elif k in ('-h', '--help'):
+            print(main.__doc__)
+            return
+    setup = '\n'.join(setup) if setup else 'pass'
+
+    import os
+    sys.path.insert(0, os.curdir)
+
     compare(
-        bool,
-        bytearray,
-        bytes,
-        complex,
-        dict,
-        float,
-        frozenset,
-        int,
-        list,
-        set,
-        str,
-        tuple,
-        number=1_000_000
+        *stmts,
+        setup=setup,
+        globals=globals,
+        number=number,
+        repeat=repeat,
+        sort_by=sort_by,
+        reverse=reverse,
+        decimal=decimal
     )
+
+
+if __name__ == '__main__':
+    main()

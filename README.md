@@ -9,7 +9,7 @@ statements and provide comparison results.
 
 You can run the following command to install the package
 
-```
+```commandline
 pip install timeit_compare
 ```
 
@@ -17,8 +17,8 @@ pip install timeit_compare
 
 ## Usage
 
-When using the timeit library, I am always more interested in comparing the 
-efficiency of several different methods to solve a problem, rather than simply 
+When using the timeit library, I am always more interested in comparing the
+efficiency of several different methods to solve a problem, rather than simply
 measuring the running time of a single statement. Here is a simple example.
 
 ```python
@@ -58,31 +58,6 @@ def sum5():
 
 The functions above are all used to sum numbers from 1 to 100, which one is the
 most efficient?  
-This problem can be easily solved by the following method:
-
-```python 
-from timeit import timeit
-
-print(timeit(sum1))
-print(timeit(sum2))
-print(timeit(sum3))
-print(timeit(sum4))
-print(timeit(sum5))
-```
-
-and get the results like:
-
-```
-3.2710195999825373
-2.050656799983699
-0.4511557999649085
-2.5759165000054054
-0.066161299997475
-```
-
-Calling timeit multiple times and printing the results makes me feel 
-troublesome, and the results seem to be not intuitive.
-
 By using:
 
 ```python
@@ -96,14 +71,60 @@ you can easily get the results like:
 [![output_example.png](https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)](
 https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)
 
-The output provides detailed results, including the mean, median, minimum, 
+The output provides detailed results, including the mean, median, minimum,
 maximum and standard deviation of each function's running time.
+
+------------------------------
+
+## Release Notes
+
+### Release 1.1.0
+
+1. The results now show the time of one loop in seconds(s), milliseconds(ms),
+   microseconds(μs), or nanoseconds(ns) instead of the total time of each
+   repetition. The conversion relationship among time units is as follows:
+
+   ```
+   1(s) = 10^3(ms) = 10^6(μs) = 10^9(ns)
+   ```
+
+2. Now the compare function supports setting parameters setup and globals
+   separately for each statement. Keyword parameters setup and globals are
+   now used to set the default parameter values for each statement.
+
+   ```python
+   from timeit_compare import compare
+   
+   stmt = '(1 + n) * n // 2'
+   compare(
+       stmt,
+       (stmt, 'n = 100', {}),
+       (stmt, '', {'n': 100}),
+       setup='n = 100'
+   )
+   ```
+
+3. If parameter number is not given or is less than or equal to 0, it now
+   defaults to a value that makes the total running time not too long. You can
+   intentionally set it to a higher value to make the results more accurate.
+
+4. Command line calls are now supported.
+
+   ```commandline
+   python -m timeit_compare -s "n = 100" "(1 + n) * n / 2" "sum(range(1, n + 1))"
+   ```
+
+   Run the following command for help.
+
+   ```commandline
+   python -m timeit_compare -h
+   ```
 
 ------------------------------
 
 ## Contact
 
-If you have any suggestions, please contact me at 
+If you have any suggestions, please contact me at
 [23S112099@stu.hit.edu.cn](mailto:23S112099@stu.hit.edu.cn).
 
 ------------------------------
