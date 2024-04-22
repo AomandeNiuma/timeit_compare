@@ -120,6 +120,16 @@ maximum and standard deviation of each function's running time.
    python -m timeit_compare -h
    ```
 
+### Release 1.1.2
+
+1. Added a parameter: time, which represents approximate total running time of
+   all statements in seconds (default 1.0). When a positive value of number
+   parameter is not given, it will be used to estimate number. Ignored when
+   number is greater than 0.
+
+2. Corrected the error of representing sample standard deviation as population
+   standard deviation.
+
 ------------------------------
 
 ## Contact
