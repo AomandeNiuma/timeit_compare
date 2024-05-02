@@ -5,15 +5,15 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='timeit_compare',
-    version='1.1.2',
+    version='1.2.0',
     py_modules=['timeit_compare'],
     license='MIT',
     python_requires='>=3.6.0',
-    description='A method based on timeit that can help you to call '
-                'timeit.timeit for several statements and provide '
-                'comparison results.',
+    description='Based on the timeit library, timeit_compare can time multiple '
+                'statements and provide comparison results.',
     long_description=long_description,
     long_description_content_type='text/markdown',
+    keywords=['timeit_compare', 'timeit', 'performance'],
     author='Liu Wei',
     author_email='23S112099@stu.hit.edu.cn',
     maintainer='Liu Wei',

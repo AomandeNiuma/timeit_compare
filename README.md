@@ -1,13 +1,13 @@
 # timeit_compare
 
-A method based on timeit that can help you to call timeit.timeit for several
-statements and provide comparison results.
+Based on the timeit library, timeit_compare can time multiple statements and 
+provide comparison results.
 
 ------------------------------
 
 ## Installation
 
-You can run the following command to install the package
+You can run the following command to install the package.
 
 ```commandline
 pip install timeit_compare
@@ -74,61 +74,48 @@ https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_exampl
 The output provides detailed results, including the mean, median, minimum,
 maximum and standard deviation of each function's running time.
 
-------------------------------
+You can also perform the following operations to obtain specific values:
 
-## Release Notes
+```python
+from timeit_compare import Compare
 
-### Release 1.1.0
+cmp = Compare()
+for func in sum1, sum2, sum3, sum4, sum5:
+    cmp.add_timer(func)
+cmp.run()
+# cmp.print_results()
 
-1. The results now show the time of one loop in seconds(s), milliseconds(ms),
-   microseconds(μs), or nanoseconds(ns) instead of the total time of each
-   repetition. The conversion relationship among time units is as follows:
+result = cmp.get_result(0)  # get the result of the timer with index 0
+print(
+    result.time, result.repeat, result.number,
+    result.mean, result.median, result.min, result.max, result.std,
+    result.error, sep='\n'
+)
+# [3.3324892420678126e-06, 3.175742677501652e-06, 3.2153616044376503e-06, 3.267199346172507e-06, 3.2638434747711383e-06]
+# 5
+# 24405
+# 3.2509272689901518e-06
+# 3.2638434747711383e-06
+# 3.175742677501652e-06
+# 3.3324892420678126e-06
+# 5.916418598334957e-08
+# None
 
-   ```
-   1(s) = 10^3(ms) = 10^6(μs) = 10^9(ns)
-   ```
+fastest = cmp.get_fastest()  # get the result of the fastest timer
+print(fastest.index)  # 4
+```
 
-2. Now the compare function supports setting parameters setup and globals
-   separately for each statement. Keyword parameters setup and globals are
-   now used to set the default parameter values for each statement.
+In a command line interface, call as follows:
 
-   ```python
-   from timeit_compare import compare
-   
-   stmt = '(1 + n) * n // 2'
-   compare(
-       stmt,
-       (stmt, 'n = 100', {}),
-       (stmt, '', {'n': 100}),
-       setup='n = 100'
-   )
-   ```
+```commandline
+python -m timeit_compare -s "n = 100" "s = 0;for i in range(1, n + 1):;    s += i" "sum(range(1, n + 1))" "(1 + n) * n // 2"
+```
 
-3. If parameter number is not given or is less than or equal to 0, it now
-   defaults to a value that makes the total running time not too long. You can
-   intentionally set it to a higher value to make the results more accurate.
+Run the following command for help:
 
-4. Command line calls are now supported.
-
-   ```commandline
-   python -m timeit_compare -s "n = 100" "(1 + n) * n / 2" "sum(range(1, n + 1))"
-   ```
-
-   Run the following command for help.
-
-   ```commandline
-   python -m timeit_compare -h
-   ```
-
-### Release 1.1.2
-
-1. Added a parameter: time, which represents approximate total running time of
-   all statements in seconds (default 1.0). When a positive value of number
-   parameter is not given, it will be used to estimate number. Ignored when
-   number is greater than 0.
-
-2. Corrected the error of representing sample standard deviation as population
-   standard deviation.
+```commandline
+python -m timeit_compare -h
+```
 
 ------------------------------
 
