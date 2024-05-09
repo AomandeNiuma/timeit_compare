@@ -6,13 +6,13 @@ Python quick usage:
     from timeit_compare import compare
 
     compare(*timer_args[, setup][, globals][, repeat][, number][, time]
-        [, sort_by][, reverse][, decimal])
+        [, show_progress][, sort_by][, reverse][, decimal])
 
 See the function compare.
 
 Command line usage:
-    python -m timeit_compare [-s] [-r] [-n] [-t] [--sort-by] [--reverse] [-d]
-        [-h] [--] [timer_args ...]
+    python -m timeit_compare [-s] [-r] [-n] [-t] [--hide-progress] [--sort-by]
+        [--reverse] [-d] [-h] [--] [timer_args ...]
 
 See the function main.
 
@@ -162,35 +162,35 @@ class _Timer:
             scale = float(f"1e{f'{self.min:.0e}'.split('e', 1)[1]}")
             unit = f'{scale:.0e}s'
 
-            dtime = decimal
+            d_time = decimal
 
             def format_time(second):
-                return f'{second / scale:.{dtime}f}'
+                return f'{second / scale:.{d_time}f}'
 
-            dpercent = max(decimal - 2, 0)
+            d_percent = max(decimal - 2, 0)
 
             def format_percent(percent):
-                d = dpercent + (
+                d = d_percent + (
                     0 if percent >= 1.0 else
                     1 if percent >= 0.1 else
                     2
                 )
                 return f'{percent:#.{d}%}'
 
-            dprocess = 5 + decimal
+            d_progress = 5 + decimal
 
-            def format_process(percent):
-                return _process_bar(percent, dprocess)
+            def format_progress(percent):
+                return _progress_bar(percent, d_progress)
 
             mean = format_time(self.mean)
             percent = _percent(self.mean, max_mean)
             mean_percent = format_percent(percent)
-            mean_process = format_process(percent)
+            mean_progress = format_progress(percent)
 
             median = format_time(self.median)
             percent = _percent(self.median, max_median)
             median_percent = format_percent(percent)
-            median_process = format_process(percent)
+            median_progress = format_progress(percent)
 
             min_ = format_time(self.min)
             max_ = format_time(self.max)
@@ -200,8 +200,8 @@ class _Timer:
                 std = self._null
 
         else:
-            unit = mean = mean_percent = mean_process = \
-                median = median_percent = median_process = \
+            unit = mean = mean_percent = mean_progress = \
+                median = median_percent = median_progress = \
                 min_ = max_ = std = self._null
 
         if self.error is not None:
@@ -211,8 +211,8 @@ class _Timer:
         else:
             error = self._null
 
-        return (index, stmt, unit, mean, mean_percent, mean_process, median,
-                median_percent, median_process, min_, max_, std, error)
+        return (index, stmt, unit, mean, mean_percent, mean_progress, median,
+                median_percent, median_progress, min_, max_, std, error)
 
 
 class Compare:
@@ -267,7 +267,7 @@ class Compare:
             time: Union[float, int] = 1.0,
             include: Iterable[int] = None,
             exclude: Iterable[int] = None,
-            show_process: bool = False
+            show_progress: bool = False
     ) -> None:
         """
         Run timers.
@@ -280,9 +280,9 @@ class Compare:
             all timers).
         :param exclude: indexes of the excluded timers (default None, no timers
             are excluded).
-        :param show_process: whether to show a progress bar (default False).
+        :param show_progress: whether to show a progress bar (default False).
         """
-        args = Compare._run_args(repeat, number, time, show_process)
+        args = Compare._run_args(repeat, number, time, show_progress)
         timers = self._select(include, exclude)
         self.reset()
         self._run(timers, *args)
@@ -357,23 +357,23 @@ class Compare:
             timers = list(self._timer.values())
         return timers
 
-    def _run(self, timers, repeat, number, time, show_process):
+    def _run(self, timers, repeat, number, time, show_progress):
         """Internal function."""
         timer_num = len(timers)
         error = 0
         total_repeat = timer_num * repeat
         complete = 0
 
-        def update_process():
-            if not show_process:
+        def update_progress():
+            if not show_progress:
                 return
             percent = _percent(complete, total_repeat)
-            string = (f'\r|{_process_bar(percent, 12)}| '
+            string = (f'\r|{_progress_bar(percent, 12)}| '
                       f'{complete}/{total_repeat} completed, '
                       f'{error}/{timer_num} error')
             print(string, end='', flush=True)
 
-        if show_process:
+        if show_progress:
             print('timing now...')
 
         if number == 0:
@@ -402,7 +402,7 @@ class Compare:
                     if turn_error:
                         error += 1
 
-        update_process()
+        update_progress()
 
         try:
             for _ in range(repeat):
@@ -411,7 +411,7 @@ class Compare:
                     if turn_error:
                         error += 1
                     complete += 1
-                    update_process()
+                    update_progress()
 
         except (KeyboardInterrupt, SystemExit) as e:
             for timer in timers:
@@ -419,9 +419,9 @@ class Compare:
                 if turn_error:
                     error += 1
             complete = total_repeat
-            update_process()
+            update_progress()
 
-        if show_process:
+        if show_progress:
             print()
 
         for timer in timers:
@@ -497,7 +497,7 @@ class Compare:
         return sort_by
 
     @staticmethod
-    def _run_args(repeat, number, time, show_process):
+    def _run_args(repeat, number, time, show_progress):
         """Internal function."""
         if not isinstance(repeat, int):
             raise TypeError(f'repeat must be a integer, not {type(repeat)}')
@@ -514,9 +514,9 @@ class Compare:
         if time < 0.0:
             time = 0.0
 
-        show_process = bool(show_process)
+        show_progress = bool(show_progress)
 
-        return repeat, number, time, show_process
+        return repeat, number, time, show_progress
 
     @staticmethod
     def _print_results_args(sort_by, reverse, decimal):
@@ -542,7 +542,7 @@ def compare(
         repeat: int = 5,
         number: int = 0,
         time: Union[float, int] = 1.0,
-        show_process: bool = True,
+        show_progress: bool = True,
         sort_by: str = 'mean',
         reverse: bool = False,
         decimal: int = 2
@@ -560,7 +560,7 @@ def compare(
 
     See add_timer, run, and print_results methods of the class Compare.
     """
-    run_args = Compare._run_args(repeat, number, time, show_process)
+    run_args = Compare._run_args(repeat, number, time, show_progress)
     print_results_args = Compare._print_results_args(sort_by, reverse, decimal)
     cmp = Compare()
     for args in timer_args:
@@ -583,20 +583,20 @@ def compare(
 _BLOCK = ' ▏▎▍▌▋▊▉█'
 
 
-def _process_bar(process, length):
+def _progress_bar(progress, length):
     """Internal function."""
-    if process <= 0.0:
+    if progress <= 0.0:
         string = ' ' * length
 
-    elif process >= 1.0:
+    elif progress >= 1.0:
         string = _BLOCK[-1] * length
 
     else:
         d = 1.0 / length
-        q = process // d
+        q = progress // d
         block1 = _BLOCK[-1] * int(q)
 
-        r = process % d
+        r = progress % d
         d2 = d / 8
         i = (r + d2 / 2) // d2
         block2 = _BLOCK[int(i)]
@@ -684,8 +684,8 @@ def _table(title, header, header_cols, body, note):
 
 def main() -> None:
     """Usage:
-  python -m timeit_compare [-s] [-r] [-n] [-t] [--sort-by] [--reverse] [-d] [-h]
-    [--] [timer_args ...]
+  python -m timeit_compare [-s] [-r] [-n] [-t] [--hide-progress] [--sort-by]
+    [--reverse] [-d] [-h] [--] [timer_args ...]
 
 Options:
   -s, --setup       default setup for positional parameters with no setup given
@@ -695,20 +695,20 @@ Options:
                     by time).
   -t, --time        approximate total running time of all statements in seconds
                     (default 1.0). Ignored when number is greater than 0.
+  --hide-progress   hide the progress bar.
   --sort-by         the basis for sorting the results, which can be 'index',
                     'mean', 'median', 'min', 'max' or 'std' (default 'mean').
-  --reverse         whether to sort the results in descending order (default
-                    False).
+  --reverse         sort the results in descending order.
   -d, --decimal     number of decimal places to be retained (default 2).
   -h, --help        print this usage message and exit.
   --                separate options from statement, use when statement starts
                     with '-'.
   timer_args        statement to be timed (statement) and statement to be
-                    executed once initially (setup, default -s).
-                    Statement and setup are given in a single argument,
-                    separated by ';;', multi-line statement and setup can be
-                    given by separating lines with ';'. Execution time of the
-                    setup statement is NOT timed."""
+                    executed once initially (setup, default -s). Statement and
+                    setup are given in a single argument, separated by ';;',
+                    multi-line statement and setup can be given by separating
+                    lines with ';'. Execution time of the setup statement is NOT
+                    timed."""
     import sys
     args = sys.argv[1:]
 
@@ -716,14 +716,11 @@ Options:
     try:
         opts, args = getopt.getopt(
             args, 's:r:n:t:d:h',
-            ['setup=', 'repeat=', 'number=', 'time=', 'sort-by=',
-             'reverse', 'decimal=', 'help'])
+            ['setup=', 'repeat=', 'number=', 'time=', 'hide-progress',
+             'sort-by=', 'reverse', 'decimal=', 'help'])
     except getopt.error as e:
-        error = str(e)
-    else:
-        error = None
-    if error is not None:
-        raise getopt.error(f'{error}\nuse -h/--help for command line help')
+        e.msg = f'{e.msg}\nuse -h/--help for command line help'
+        raise
 
     timer_args = [
         [j.replace(';', '\n') for j in i.split(';;', 1)]
@@ -734,6 +731,7 @@ Options:
     repeat = 5
     number = 0
     time = 1.0
+    show_progress = True
     sort_by = 'mean'
     reverse = False
     decimal = 2
@@ -746,6 +744,8 @@ Options:
             number = int(v)
         elif k in ('-t', '--time'):
             time = float(v)
+        elif k == '--hide-progress':
+            show_progress = False
         elif k == '--sort-by':
             sort_by = v
         elif k == '--reverse':
@@ -767,6 +767,7 @@ Options:
         repeat=repeat,
         number=number,
         time=time,
+        show_progress=show_progress,
         sort_by=sort_by,
         reverse=reverse,
         decimal=decimal
