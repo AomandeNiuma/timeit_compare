@@ -367,8 +367,9 @@ class Compare:
         def update_process():
             if not show_process:
                 return
-            process = _process_bar(_percent(complete, total_repeat), 16)
-            string = (f'\r|{process}| {complete}/{total_repeat} completed, '
+            percent = _percent(complete, total_repeat)
+            string = (f'\r|{_process_bar(percent, 12)}| '
+                      f'{complete}/{total_repeat} completed, '
                       f'{error}/{timer_num} error')
             print(string, end='', flush=True)
 
@@ -390,8 +391,8 @@ class Compare:
                     if error == timer_num:
                         return 0
                     if total_time > 0.2:
-                        return max(round((time * (n / total_time)) / repeat), 1)
-                    n <<= 1
+                        return max(round(n * time / total_time / repeat), 1)
+                    n = int(n * 0.25 / total_time) + 1 if total_time else n * 2
 
             try:
                 number = estimate()
@@ -541,6 +542,7 @@ def compare(
         repeat: int = 5,
         number: int = 0,
         time: Union[float, int] = 1.0,
+        show_process: bool = True,
         sort_by: str = 'mean',
         reverse: bool = False,
         decimal: int = 2
@@ -558,7 +560,7 @@ def compare(
 
     See add_timer, run, and print_results methods of the class Compare.
     """
-    run_args = Compare._run_args(repeat, number, time, True)
+    run_args = Compare._run_args(repeat, number, time, show_process)
     print_results_args = Compare._print_results_args(sort_by, reverse, decimal)
     cmp = Compare()
     for args in timer_args:

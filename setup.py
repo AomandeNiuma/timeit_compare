@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='timeit_compare',
-    version='1.2.0',
+    version='1.2.1',
     py_modules=['timeit_compare'],
     license='MIT',
     python_requires='>=3.6.0',
