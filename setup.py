@@ -5,12 +5,14 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='timeit_compare',
-    version='1.2.2',
-    py_modules=['timeit_compare'],
-    license='MIT',
+    version='1.3.0',
+    packages=['timeit_compare'],
+    install_requires=['typing_extensions'],
     python_requires='>=3.6.0',
-    description='Based on the timeit library, timeit_compare can time multiple '
-                'statements and provide comparison results.',
+    license='MIT',
+    description='Based on the timeit library, timeit_compare can conveniently '
+                'measure execution times of multiple statements and provide '
+                'some basic descriptive statistics to compare the results.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     keywords=['timeit_compare', 'timeit', 'performance'],
@@ -29,5 +31,6 @@ setup(
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13'
     ]
 )

@@ -1,13 +1,14 @@
 # timeit_compare
 
-Based on the timeit library, timeit_compare can time multiple statements and 
-provide comparison results.
+Based on the timeit library, timeit_compare can conveniently measure execution
+times of multiple statements and provide some basic descriptive statistics to
+compare the results.
 
 ------------------------------
 
 ## Installation
 
-You can run the following command to install the package.
+To install the package, run the following command:
 
 ```commandline
 pip install timeit_compare
@@ -17,113 +18,36 @@ pip install timeit_compare
 
 ## Usage
 
-When using the timeit library, I am always more interested in comparing the
-efficiency of several different methods to solve a problem, rather than simply
-measuring the running time of a single statement. Here is a simple example.
+Here is a simple example from the timeit library documentation:
 
-```python
-from functools import reduce
-from operator import add
-
-n = 100
-
-
-def sum1():
-    s = 0
-    i = 1
-    while i <= n:
-        s += i
-        i += 1
-    return s
-
-
-def sum2():
-    s = 0
-    for i in range(1, n + 1):
-        s += i
-    return s
-
-
-def sum3():
-    return sum(range(1, n + 1))
-
-
-def sum4():
-    return reduce(add, range(1, n + 1))
-
-
-def sum5():
-    return (1 + n) * n // 2
+```pycon
+>>> from timeit_compare import compare
+>>> 
+>>> compare(
+...     "'-'.join(str(n) for n in range(100))",
+...     "'-'.join([str(n) for n in range(100)])",
+...     "'-'.join(map(str, range(100)))"
+... )
+timing now...
+|████████████| 15/15 completed
+                                 Table 1. Comparison Results (unit: s)                                 
+╭────┬───────────────────────────┬─────┬──────────────────────────┬────────┬────────┬────────┬────────╮
+│ Id │           Stmt            │ Rpt │          Mean ↓          │ Median │  Min   │  Max   │  Std   │
+├────┼───────────────────────────┼─────┼────────┬───────┬─────────┼────────┼────────┼────────┼────────┤
+│ 1  │ '-'.join([str(n) for n i… │  5  │ 6.2e-6 │ 74.5% │ █████▎  │ 6.2e-6 │ 6.2e-6 │ 6.2e-6 │ 1.3e-8 │
+│ 2  │ '-'.join(map(str, range(… │  5  │ 7.2e-6 │ 86.9% │ ██████▏ │ 7.2e-6 │ 7.2e-6 │ 7.2e-6 │ 1.9e-8 │
+│ 0  │ '-'.join(str(n) for n in… │  5  │ 8.3e-6 │ 100.% │ ███████ │ 8.3e-6 │ 8.3e-6 │ 8.3e-6 │ 2.0e-8 │
+╰────┴───────────────────────────┴─────┴────────┴───────┴─────────┴────────┴────────┴────────┴────────╯
+9225 executions for each statement per repetition                                                      
+total execution time 1.0007s                                                                           
 ```
 
-The functions above are all used to sum numbers from 1 to 100, which one is the
-most efficient?  
-By using:
-
-```python
-from timeit_compare import compare
-
-compare(sum1, sum2, sum3, sum4, sum5)
-```
-
-you can easily get the results like:
-
-[![output_example.png](https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)](
-https://raw.githubusercontent.com/AomandeNiuma/timeit_compare/main/output_example.png)
-
-The output provides detailed results, including the mean, median, minimum,
-maximum and standard deviation of each function's running time.
-
-You can also perform the following operations to obtain specific values:
-
-```python
-from timeit_compare import Compare
-
-cmp = Compare()
-for func in sum1, sum2, sum3, sum4, sum5:
-    cmp.add_timer(func)
-cmp.run()
-# cmp.print_results()
-
-result = cmp.get_result(0)  # get the result of the timer with index 0
-print(
-    result.time, result.repeat, result.number,
-    result.mean, result.median, result.min, result.max, result.std,
-    result.error, sep='\n'
-)
-# [3.3324892420678126e-06, 3.175742677501652e-06, 3.2153616044376503e-06, 3.267199346172507e-06, 3.2638434747711383e-06]
-# 5
-# 24405
-# 3.2509272689901518e-06
-# 3.2638434747711383e-06
-# 3.175742677501652e-06
-# 3.3324892420678126e-06
-# 5.916418598334957e-08
-# None
-
-fastest = cmp.get_fastest()  # get the result of the fastest timer
-print(fastest.index)  # 4
-```
+The table shows some basic descriptive statistics on the execution time of each
+statement for comparison, including mean, median, minimum, maximum, and standard
+deviation.
 
 In a command line interface, call as follows:
 
 ```commandline
-python -m timeit_compare -s "n = 100" "s = 0;for i in range(1, n + 1):;    s += i" "sum(range(1, n + 1))" "(1 + n) * n // 2"
+python -m timeit_compare -a "'-'.join(str(n) for n in range(100))" -a "'-'.join([str(n) for n in range(100)])" -a "'-'.join(map(str, range(100)))"
 ```
-
-Run the following command for help:
-
-```commandline
-python -m timeit_compare -h
-```
-
-------------------------------
-
-## Contact
-
-If you have any suggestions, please contact me at
-[23S112099@stu.hit.edu.cn](mailto:23S112099@stu.hit.edu.cn).
-
-------------------------------
-
-## End
