@@ -36,9 +36,9 @@ class Compare:
 
     def run(
             self,
-            repeat: int = 5,
+            repeat: int = 7,
             number: int = 0,
-            time: Union[float, int] = 1.0,
+            time: Union[float, int] = 1.5,
             show_progress: bool = False,
     ) -> None: ...
 
@@ -70,9 +70,9 @@ def compare(
         setup: _Stmt = 'pass',
         globals: Dict[str, Any] = None,
         add_stats: Sequence[Tuple[_Stat, _StatFunc]] = (),
-        repeat: int = 5,
+        repeat: int = 7,
         number: int = 0,
-        time: Union[float, int] = 1.0,
+        time: Union[float, int] = 1.5,
         show_progress: bool = True,
         sort_by: Optional[_Stat] = 'mean',
         reverse: bool = False,

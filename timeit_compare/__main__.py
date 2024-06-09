@@ -23,17 +23,17 @@ def main(args=None):
         help="the global default value for setup in -a (default: 'pass'). A "
              "multi-line statement is processed in the same way as -a.")
     parse.add_argument(
-        '-r', '--repeat', type=int, default=5,
-        help='how many times to repeat the timer (default: 5).')
+        '-r', '--repeat', type=int, default=7,
+        help='how many times to repeat the timer (default: 7).')
     parse.add_argument(
         '-n', '--number', type=int, default=0,
         help='how many times to execute statement (default: estimated by -t).')
     parse.add_argument(
-        '-t', '--time', type=float, default=1.0,
+        '-t', '--time', type=float, default=1.5,
         help='if specified and no -n greater than 0 is specified, it will be '
              'used to estimate a -n so that the total execution time (in '
              'seconds) of all statements is approximately equal to this value '
-             '(default: 1.0).')
+             '(default: 1.5).')
     parse.add_argument(
         '--no-progress', action='store_true', help='no progress bar.')
     parse.add_argument(
@@ -86,7 +86,7 @@ def main(args=None):
             precision=args.precision
         )
 
-    except (Exception, KeyboardInterrupt):
+    except:
         import traceback
 
         traceback.print_exc()

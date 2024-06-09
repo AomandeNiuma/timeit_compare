@@ -1,7 +1,5 @@
 """
-Based on the timeit library, timeit_compare can conveniently measure execution
-times of multiple statements and provide some basic descriptive statistics to
-compare the results.
+Conveniently measure and compare the execution time of multiple statements.
 
 Python quick usage:
     from timeit_compare import compare
@@ -25,31 +23,55 @@ Run 'python -m timeit_compare -h' for command line help.
 # python >= 3.6
 
 import itertools
-import statistics
 import sys
 import time
 from collections import namedtuple, OrderedDict
 from keyword import iskeyword
 from timeit import Timer
-from typing import Sequence
 
 if sys.version_info >= (3, 7):
     OrderedDict = dict
 
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 __all__ = ['TimerResult', 'Compare', 'compare']
 
 # store the result of a timer
 TimerResult = namedtuple('TimerResult', (
-    'id', 'repeat', 'stats', 'time', 'number'))
+    'id', 'repeat', 'number', 'stats', 'time'))
+
+
+def _mean(data):
+    """Internal function."""
+    if data:
+        return sum(data) / len(data)
+
+
+def _median(data):
+    """Internal function."""
+    if data:
+        n = len(data)
+        sorted_data = sorted(data)
+        k = n // 2
+        if n & 1:
+            return sorted_data[k]
+        else:
+            return (sorted_data[k] + sorted_data[k - 1]) / 2
+
+
+def _std(data):
+    """Internal function."""
+    n = len(data)
+    if n >= 2:
+        mean = sum(data) / len(data)
+        return ((sum(i * i for i in data) - n * mean * mean) / (n - 1)) ** 0.5
+
 
 _DEFAULT_STATS = OrderedDict(
-    mean=statistics.fmean if sys.version_info >= (3, 8) else statistics.mean,
-    median=statistics.median,
-    min=min,
-    max=max,
-    std=statistics.stdev
+    mean=_mean, median=_median,
+    min=lambda data: min(data) if data else None,
+    max=lambda data: max(data) if data else None,
+    std=_std
 )
 
 
@@ -72,10 +94,9 @@ class _Timer(Timer):
         self.stmt = stmt
         self.time = ()
         self.total_time = 0.0
+        self.unreliable = False
         self.stats = {}
         self._result = None
-
-    repeat = property(lambda self: len(self.time))
 
     def add_stat(self, stat, func):
         self.stats[stat] = _stat_call(func, self.time)
@@ -93,37 +114,36 @@ class _Timer(Timer):
                 e.add_note(f'(timer id: {self.id})')
                 raise
 
-    def get_result(self, number, stats_namedtuple):
+    def get_result(self, repeat, number, stats_namedtuple):
         if self._result is None:
             self._result = TimerResult(
                 id=self.id,
-                repeat=self.repeat,
+                repeat=repeat,
+                number=number,
                 stats=stats_namedtuple(**self.stats),
-                time=self.time,
-                number=number)
+                time=self.time)
         return self._result
 
     def get_line(self, stats, max_value, precision):
         line = []
 
         id = f'{self.id}'
+        if self.unreliable:
+            id += '*'
         line.append(id)
 
         if isinstance(self.stmt, str):
             stmt = repr(self.stmt)[1:-1]
         elif callable(self.stmt):
             if hasattr(self.stmt, '__name__'):
-                stmt = f'{self.stmt.__name__}()'
+                stmt = self.stmt.__name__ + '()'
             else:
                 stmt = self._null
         else:
             stmt = self._null
         if len(stmt) > 25:
-            stmt = f'{stmt[:24]}…'
+            stmt = stmt[:24] + '…'
         line.append(stmt)
-
-        repeat = f'{self.repeat}'
-        line.append(repeat)
 
         p_time = precision
         p_percentage = max(precision - 2, 0)
@@ -186,6 +206,7 @@ class Compare:
         self._timer_id = itertools.count()
         self._timer = OrderedDict()
         self._stats = _DEFAULT_STATS.copy()
+        self._repeat = 0
         self._number = 0
         self._stats_namedtuple = None
 
@@ -271,16 +292,16 @@ class Compare:
                 f"{{{', '.join(map(repr, self._stats))}}}.")
         return stat
 
-    def run(self, repeat=5, number=0, time=1.0, show_progress=False):
+    def run(self, repeat=7, number=0, time=1.5, show_progress=False):
         """
         Run timers.
-        :param repeat: how many times to repeat the timer (default: 5).
+        :param repeat: how many times to repeat the timer (default: 7).
         :param number: how many times to execute statement (default: estimated
             by time).
         :param time: if specified and no number greater than 0 is specified, it
             will be used to estimate a number so that the total execution time
             (in seconds) of all statements is approximately equal to this value
-            (default: 1.0).
+            (default: 1.5).
         :param show_progress: whether to show a progress bar (default: False).
         """
         if not isinstance(repeat, int):
@@ -313,55 +334,51 @@ class Compare:
             timer: {
                 'time': [],
                 'total_time': 0.0,
+                'unreliable': False,
                 'stats': {},
-                '_results': None
+                '_result': None
             }
             for timer in self._timer.values()
         }
 
-        catch_interrupt = hasattr(self, '_catch_interrupt')
+        if number <= 0:
+            n = 1
+            while True:
+                t = sum([timer.timeit(n) for timer in new])
+                if t > 0.2:
+                    number = max(round(n * time / t / repeat), 1)
+                    break
+                n = int(n * 0.25 / t) + 1 if t else n * 2
 
-        try:
-            if number <= 0:
-                n = 1
-                while True:
-                    t = 0.0
-                    for timer in new:
-                        t += timer.timeit(n)
-                    if t > 0.2:
-                        number = max(round(n * time / t / repeat), 1)
-                        break
-                    n = int(n * 0.25 / t) + 1 if t else n * 2
+        if show_progress:
+            progress = self._run_progress(len(new) * repeat)
+        else:
+            progress = itertools.repeat(None)
 
-            if show_progress:
-                progress = self._run_progress(len(new) * repeat)
-            else:
-                progress = itertools.repeat(None)
-
-            next(progress)
-            for _ in range(repeat):
-                for timer, result in new.items():
-                    t = timer.timeit(number)
-                    result['time'].append(t / number)
-                    result['total_time'] += t
-                    next(progress)
-
-        except KeyboardInterrupt as e:
-            if not catch_interrupt:
-                raise
-            self._catch_interrupt = e
+        next(progress)
+        for _ in range(repeat):
+            for timer, result in new.items():
+                t = timer.timeit(number)
+                result['time'].append(t / number)
+                result['total_time'] += t
+                next(progress)
 
         if show_progress:
             print()
 
         for result in new.values():
             result['time'] = tuple(result['time'])
+
+            if max(result['time']) >= min(result['time']) * 4:
+                result['unreliable'] = True
+
             for stat, func in self._stats.items():
                 result['stats'][stat] = _stat_call(func, result['time'])
 
         # update new results
         for timer, result in new.items():
             timer.__dict__.update(result)
+        self._repeat = repeat
         self._number = number
 
     @staticmethod
@@ -381,7 +398,7 @@ class Compare:
         if self._stats_namedtuple is None:
             self._stats_namedtuple = namedtuple('Stats', self._stats)
         return self._timer[id].get_result(
-            self._number, self._stats_namedtuple)
+            self._repeat, self._number, self._stats_namedtuple)
 
     def get_min(self, stat='mean'):
         """
@@ -497,11 +514,11 @@ class Compare:
         """Internal function."""
         title = 'Comparison Results (unit: s)'
 
-        header = ['Id', 'Stmt', 'Rpt', *(stat.title() for stat in stats)]
+        header = ['Id', 'Stmt', *(stat.title() for stat in stats)]
         if sort_by is not None:
-            for i, stat in enumerate(stats, 3):
+            for i, stat in enumerate(stats, 2):
                 if stat == sort_by:
-                    header[i] = f"{header[i]} {'↓' if not reverse else '↑'}"
+                    header[i] += ' ↓' if not reverse else ' ↑'
 
             timers_sort, timers_none = [], []
             for timer in timers:
@@ -512,7 +529,7 @@ class Compare:
             timers = timers_sort + timers_none
 
         header_cols = [1] * len(header)
-        for i, stat in enumerate(stats, 3):
+        for i, stat in enumerate(stats, 2):
             if stat in percentage:
                 header_cols[i] = 3
 
@@ -527,17 +544,36 @@ class Compare:
         body = [timer.get_line(stats, max_value, precision) for timer in timers]
 
         total_time = sum(timer.total_time for timer in timers)
-        notes = [
-            f"{self._number} execution{'s' if self._number != 1 else ''} for "
-            f"each statement per repetition",
-            f"total execution time {total_time:.4f}s"
-        ]
+        note = (f"{self._repeat} run{'s' if self._repeat != 1 else ''}, "
+                f"{self._number} loop{'s' if self._number != 1 else ''} each, "
+                f"total time {total_time:#.4g}s")
+        unreliable = any(timer.unreliable for timer in timers)
+        if unreliable:
+            note += ('\n*: Marked results are likely unreliable as the worst '
+                     'time was more than four times slower than the best time.')
 
-        print(_table(title, header, header_cols, body, notes))
+        table = _table(title, header, header_cols, body, note)
+        if unreliable:
+            # mark unreliable tips in red
+            table = table.splitlines(keepends=True)
+            i = 3
+            while table[i][0] != '├':
+                i += 1
+            for i, timer in enumerate(timers, i + 1):
+                if timer.unreliable:
+                    table[i] = table[i].replace('*', '\x1b[31m*\x1b[0m', 1)
+            i = -1
+            while table[i][0] != '*':
+                i -= 1
+            table[i] = '\x1b[31m' + table[i]
+            table[-1] += '\x1b[0m'
+            table = ''.join(table)
+
+        print(table)
 
 
-def compare(*add_timers, setup='pass', globals=None, add_stats=(), repeat=5,
-            number=0, time=1.0, show_progress=True, sort_by='mean',
+def compare(*add_timers, setup='pass', globals=None, add_stats=(), repeat=7,
+            number=0, time=1.5, show_progress=True, sort_by='mean',
             reverse=False, stats=None, percentage=None, precision=2):
     """
     Convenience function to create Compare object, call add_timer, add_stat, run
@@ -551,13 +587,13 @@ def compare(*add_timers, setup='pass', globals=None, add_stats=(), repeat=5,
         same as Compare.add_timer).
     See add_timer, add_stat, run, and print_results methods of the class Compare
     for other parameters.
-
-    If the program is interrupted by Ctrl+C, the results will still be printed.
     """
     cmp = Compare()
 
     for args in add_timers:
-        if isinstance(args, Sequence) and not isinstance(args, str):
+        if isinstance(args, str) or callable(args):
+            args = args, setup, globals
+        else:
             args = list(args)
             if len(args) < 3:
                 args.extend([None] * (3 - len(args)))
@@ -565,8 +601,6 @@ def compare(*add_timers, setup='pass', globals=None, add_stats=(), repeat=5,
                 args[1] = setup
             if args[2] is None:
                 args[2] = globals
-        else:
-            args = args, setup, globals
         cmp.add_timer(*args)
 
     for stat, func in add_stats:
@@ -578,14 +612,9 @@ def compare(*add_timers, setup='pass', globals=None, add_stats=(), repeat=5,
     print_results_args = cmp._print_results_args(
         None, None, sort_by, reverse, stats, percentage, precision)
 
-    cmp._catch_interrupt = None
     cmp.run(repeat, number, time, show_progress)
-    interrupt = cmp._catch_interrupt
 
     cmp._print_results(*print_results_args)
-
-    if interrupt is not None:
-        raise interrupt
 
 
 _BLOCK = ' ▏▎▍▌▋▊▉█'
@@ -612,10 +641,32 @@ def _progress_bar(progress, length):
     return string
 
 
+def _wrap(text, width):
+    """Internal function."""
+    result = []
+    for line in text.splitlines():
+        line = line.rstrip(' ')
+        if not line:
+            result.append('')
+            continue
+        while line:
+            if len(line) <= width:
+                result.append(line)
+                break
+            for split in range(width, -1, -1):
+                if line[split] == ' ':
+                    break
+            else:
+                split = width
+            result.append(line[:split].rstrip(' '))
+            line = line[split:].lstrip(' ')
+    return result
+
+
 _TABLE_NUMBER = itertools.count(1)
 
 
-def _table(title, header, header_cols, body, notes):
+def _table(title, header, header_cols, body, note):
     """Internal function."""
     title = f'Table {next(_TABLE_NUMBER)}. {title}'
 
@@ -634,8 +685,8 @@ def _table(title, header, header_cols, body, notes):
         else:
             bw = sum(body_width[i: i + col]) + col - 1
             if hw > bw:
-                bw = hw - bw
-                q, r = divmod(bw, col)
+                dw = hw - bw
+                q, r = divmod(dw, col)
                 for j in range(i, i + col):
                     body_width[j] += q
                 for j in range(i, i + r):
@@ -645,23 +696,17 @@ def _table(title, header, header_cols, body, notes):
         header_width.append(hw)
         i += col
 
-    total_width = sum(header_width) + len(header_width) + 1
-    other_width = max(len(title), *map(len, notes))
-    if other_width > total_width:
-        bw = other_width - total_width
-        dl = ' ' * (bw // 2)
-        dr = ' ' * (bw - bw // 2)
-        total_width = other_width
-    else:
-        dl = dr = ''
+    table_width = sum(header_width) + len(header_width) + 1
+    title = _wrap(title, table_width)
+    note = _wrap(note, table_width)
 
-    title_line = f'{{:^{total_width}}}'
-    header_line = f"{dl}│{'│'.join(f'{{:^{hw}}}' for hw in header_width)}│{dr}"
-    body_line = f"{dl}│{'│'.join(f'{{:^{bw}}}' for bw in body_width)}│{dr}"
-    note_line = f'{{:<{total_width}}}'
+    title_line = f'{{:^{table_width}}}'
+    header_line = f"│{'│'.join(f'{{:^{hw}}}' for hw in header_width)}│"
+    body_line = f"│{'│'.join(f'{{:^{bw}}}' for bw in body_width)}│"
+    note_line = f'{{:<{table_width}}}'
 
-    top_border = f"{dl}╭{'┬'.join('─' * hw for hw in header_width)}╮{dr}"
-    bottom_border = f"{dl}╰{'┴'.join('─' * bw for bw in body_width)}╯{dr}"
+    top_border = f"╭{'┬'.join('─' * hw for hw in header_width)}╮"
+    bottom_border = f"╰{'┴'.join('─' * bw for bw in body_width)}╯"
     split_border = []
     bw = iter(body_width)
     for col in header_cols:
@@ -670,23 +715,18 @@ def _table(title, header, header_cols, body, notes):
         else:
             border = '┬'.join('─' * next(bw) for _ in range(col))
         split_border.append(border)
-    split_border = f"{dl}├{'┼'.join(split_border)}┤{dr}"
+    split_border = f"├{'┼'.join(split_border)}┤"
 
     template = '\n'.join(
         (
-            title_line,
+            *[title_line] * len(title),
             top_border,
             header_line,
             split_border,
             *[body_line] * len(body),
             bottom_border,
-            *[note_line] * len(notes)
+            *[note_line] * len(note)
         )
     )
 
-    return template.format(
-        title,
-        *header,
-        *itertools.chain.from_iterable(body),
-        *notes
-    )
+    return template.format(*itertools.chain(title, header, *body, note))

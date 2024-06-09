@@ -1,8 +1,6 @@
 # timeit_compare
 
-Based on the timeit library, timeit_compare can conveniently measure execution
-times of multiple statements and provide some basic descriptive statistics to
-compare the results.
+Conveniently measure and compare the execution time of multiple statements.
 
 ------------------------------
 
@@ -29,17 +27,16 @@ Here is a simple example from the timeit library documentation:
 ...     "'-'.join(map(str, range(100)))"
 ... )
 timing now...
-|████████████| 15/15 completed
-                                 Table 1. Comparison Results (unit: s)                                 
-╭────┬───────────────────────────┬─────┬──────────────────────────┬────────┬────────┬────────┬────────╮
-│ Id │           Stmt            │ Rpt │          Mean ↓          │ Median │  Min   │  Max   │  Std   │
-├────┼───────────────────────────┼─────┼────────┬───────┬─────────┼────────┼────────┼────────┼────────┤
-│ 1  │ '-'.join([str(n) for n i… │  5  │ 6.2e-6 │ 74.5% │ █████▎  │ 6.2e-6 │ 6.2e-6 │ 6.2e-6 │ 1.3e-8 │
-│ 2  │ '-'.join(map(str, range(… │  5  │ 7.2e-6 │ 86.9% │ ██████▏ │ 7.2e-6 │ 7.2e-6 │ 7.2e-6 │ 1.9e-8 │
-│ 0  │ '-'.join(str(n) for n in… │  5  │ 8.3e-6 │ 100.% │ ███████ │ 8.3e-6 │ 8.3e-6 │ 8.3e-6 │ 2.0e-8 │
-╰────┴───────────────────────────┴─────┴────────┴───────┴─────────┴────────┴────────┴────────┴────────╯
-9225 executions for each statement per repetition                                                      
-total execution time 1.0007s                                                                           
+|████████████| 21/21 completed
+                              Table 1. Comparison Results (unit: s)                              
+╭────┬───────────────────────────┬──────────────────────────┬────────┬────────┬────────┬────────╮
+│ Id │           Stmt            │          Mean ↓          │ Median │  Min   │  Max   │  Std   │
+├────┼───────────────────────────┼────────┬───────┬─────────┼────────┼────────┼────────┼────────┤
+│ 1  │ '-'.join([str(n) for n i… │ 6.2e-6 │ 75.3% │ █████▎  │ 6.2e-6 │ 6.2e-6 │ 6.3e-6 │ 3.2e-8 │
+│ 2  │ '-'.join(map(str, range(… │ 7.2e-6 │ 87.4% │ ██████▏ │ 7.2e-6 │ 7.2e-6 │ 7.3e-6 │ 2.3e-8 │
+│ 0  │ '-'.join(str(n) for n in… │ 8.3e-6 │ 100.% │ ███████ │ 8.3e-6 │ 8.2e-6 │ 8.3e-6 │ 2.3e-8 │
+╰────┴───────────────────────────┴────────┴───────┴─────────┴────────┴────────┴────────┴────────╯
+7 runs, 9894 loops each, total time 1.504s                                                       
 ```
 
 The table shows some basic descriptive statistics on the execution time of each
