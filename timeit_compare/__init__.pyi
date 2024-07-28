@@ -1,82 +1,91 @@
-from typing_extensions import (NamedTuple, TypeAlias, Union, Callable, Any,
-                               Dict, Tuple, Optional, Iterable, Sequence)
+from typing_extensions import TypeAlias, Union, Callable, Any, Literal, Dict, \
+    List, Optional, Iterable, Tuple
 
-__all__ = ['TimerResult', 'Compare', 'compare']
+__all__ = ['TimeitResult', 'ComparisonResults', 'compare', 'cmp']
 
-_TimerId: TypeAlias = int
 _Stmt: TypeAlias = Union[Callable[[], Any], str]
-_Stat: TypeAlias = str
-_StatFunc: TypeAlias = Callable[
-    [Tuple[float, ...]], Optional[Union[float, int]]]
+_Stat: TypeAlias = Literal['mean', 'median', 'min', 'max', 'stdev']
+_Globals: TypeAlias = Dict[str, Any]
 
 
-class TimerResult(NamedTuple):
-    id: _TimerId
+class TimeitResult:
+    index: int
+    stmt: _Stmt
     repeat: int
-    stats: NamedTuple
-    time: Tuple[float, ...]
     number: int
+    times: List[float]
+    total_time: float
+    mean: Optional[float]
+    median: Optional[float]
+    min: Optional[float]
+    max: Optional[float]
+    stdev: Optional[float]
+    unreliable: bool
+
+    def __init__(self, index: int, stmt: _Stmt, repeat: int, number: int,
+                 times: List[float], total_time: float) -> None: ...
+
+    def __str__(self) -> str: ...
+
+    def print(self, precision: int = 2) -> None: ...
 
 
-class Compare:
-    def __init__(self) -> None: ...
+class ComparisonResults:
+    repeat: int
+    number: int
+    total_time: float
+    unreliable: bool
 
-    def add_timer(
-            self,
-            stmt: _Stmt,
-            setup: _Stmt = 'pass',
-            globals: Dict[str, Any] = None
-    ) -> _TimerId: ...
+    def __init__(self, repeat: int, number: int, results: List[TimeitResult]) \
+            -> None: ...
 
-    def del_timer(self, id: _TimerId) -> None: ...
+    def __getitem__(self, item: int) -> TimeitResult: ...
 
-    def add_stat(self, stat: _Stat, func: _StatFunc) -> None: ...
+    def __iter__(self) -> Iterable[TimeitResult]: ...
 
-    def del_stat(self, stat: _Stat) -> None: ...
+    def __reversed__(self) -> Iterable[TimeitResult]: ...
 
-    def run(
-            self,
-            repeat: int = 7,
-            number: int = 0,
-            time: Union[float, int] = 1.5,
-            show_progress: bool = False,
-    ) -> None: ...
+    def __len__(self) -> int: ...
 
-    def get_result(self, id: _TimerId) -> TimerResult: ...
+    def __str__(self) -> str: ...
 
-    def get_min(self, stat: _Stat = 'mean') -> Optional[TimerResult]: ...
-
-    def get_max(self, stat: _Stat = 'mean') -> Optional[TimerResult]: ...
-
-    def print_results(
-            self,
-            include: Iterable[_TimerId] = None,
-            exclude: Iterable[_TimerId] = None,
-            sort_by: Optional[_Stat] = 'mean',
-            reverse: bool = False,
-            stats: Union[_Stat, Sequence[_Stat]] = None,
-            percentage: Union[_Stat, Iterable[_Stat]] = None,
-            precision: int = 2
-    ) -> None: ...
+    def print(self, sort_by: Optional[_Stat] = 'mean', reverse: bool = False,
+              precision: int = 2, percentage: Iterable[_Stat] = None,
+              include: Iterable[int] = None, exclude: Iterable[int] = None) \
+            -> None: ...
 
 
 def compare(
-        *add_timers: Union[
+        *timers: Union[
             _Stmt,
             Tuple[_Stmt],
             Tuple[_Stmt, Optional[_Stmt]],
-            Tuple[_Stmt, Optional[_Stmt], Optional[Dict[str, Any]]]
+            Tuple[_Stmt, Optional[_Stmt], Optional[_Globals]]
         ],
         setup: _Stmt = 'pass',
-        globals: Dict[str, Any] = None,
-        add_stats: Sequence[Tuple[_Stat, _StatFunc]] = (),
+        globals: _Globals = None,
         repeat: int = 7,
         number: int = 0,
-        time: Union[float, int] = 1.5,
+        total_time: float = 1.5,
+        show_progress: bool = False
+) -> ComparisonResults: ...
+
+
+def cmp(
+        *timers: Union[
+            _Stmt,
+            Tuple[_Stmt],
+            Tuple[_Stmt, Optional[_Stmt]],
+            Tuple[_Stmt, Optional[_Stmt], Optional[_Globals]]
+        ],
+        setup: _Stmt = 'pass',
+        globals: _Globals = None,
+        repeat: int = 7,
+        number: int = 0,
+        total_time: float = 1.5,
         show_progress: bool = True,
         sort_by: Optional[_Stat] = 'mean',
         reverse: bool = False,
-        stats: Union[_Stat, Sequence[_Stat]] = None,
-        percentage: Union[_Stat, Iterable[_Stat]] = None,
-        precision: int = 2
+        precision: int = 2,
+        percentage: Iterable[_Stat] = None
 ) -> None: ...

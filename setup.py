@@ -1,16 +1,20 @@
+import sys
+
 from setuptools import setup
+
+sys.argv.append('sdist')
 
 with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
     name='timeit_compare',
-    version='1.3.1',
+    version='1.4.0',
     packages=['timeit_compare'],
     install_requires=['typing_extensions'],
     python_requires='>=3.6.0',
     license='MIT',
-    description='Conveniently measure and compare the execution time of '
+    description='Conveniently measure and compare the execution times of '
                 'multiple statements.',
     long_description=long_description,
     long_description_content_type='text/markdown',
