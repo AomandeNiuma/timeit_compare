@@ -9,7 +9,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='timeit_compare',
-    version='1.4.0',
+    version='1.4.1',
     packages=['timeit_compare'],
     install_requires=['typing_extensions'],
     python_requires='>=3.6.0',

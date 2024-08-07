@@ -25,7 +25,7 @@ from timeit import Timer
 
 # python >= 3.6
 
-__version__ = '1.4.0'
+__version__ = '1.4.1'
 
 __all__ = ['TimeitResult', 'ComparisonResults', 'compare', 'cmp']
 
@@ -112,12 +112,11 @@ class TimeitResult:
     def _table(self, precision):
         """Internal function."""
         title = 'Timeit Result (unit: s)'
-        header = ['Idx', 'Stmt', *(stat.title() for stat in _stats)]
+        header = ['Idx', *(stat.title() for stat in _stats), 'Stmt']
         header_cols = [1] * len(header)
-        # merge min and max cells
-        header[4] = f'{header[4]} - {header.pop(5)}'
-        header_cols[4] += header_cols.pop(5)
-        body = [self._get_line(precision, {})]
+        body = self._get_line(precision, {})
+        body_aligns = ['c'] * sum(header_cols)
+        body_aligns[-1] = 'l'
         note = (f"{self.repeat} run{'s' if self.repeat != 1 else ''}, "
                 f"{self.number} loop{'s' if self.number != 1 else ''} each, "
                 f"total time {self.total_time:#.4g}s")
@@ -125,12 +124,12 @@ class TimeitResult:
             note += (
                 '\n*: Marked results are likely unreliable as the worst '
                 'time was more than four times slower than the best time.')
-        table = _table(title, header, header_cols, body, note)
+        table = _table(title, header, header_cols, body, body_aligns, note)
         if self.unreliable:
             # mark unreliable tips in red
             table = table.splitlines(keepends=True)
             i = 3
-            while table[i][0] != '├':
+            while table[i][0] != '─':
                 i += 1
             i += 1
             table[i] = table[i].replace('*', '\x1b[31m*\x1b[0m', 1)
@@ -152,16 +151,6 @@ class TimeitResult:
         if self.unreliable:
             index += '*'
         line.append(index)
-
-        if isinstance(self.stmt, str):
-            stmt = repr(self.stmt)[1:-1]
-        elif callable(self.stmt) and hasattr(self.stmt, '__name__'):
-            stmt = self.stmt.__name__ + '()'
-        else:
-            stmt = self._null
-        if len(stmt) > 25:
-            stmt = stmt[:24] + '…'
-        line.append(stmt)
 
         p_percentage = max(precision - 2, 0)
         k = 1.0 - 5 * 0.1 ** (p_percentage + 4)
@@ -200,7 +189,21 @@ class TimeitResult:
                     line.append(self._null)
                     line.append(self._null)
 
-        return line
+        if isinstance(self.stmt, str):
+            stmts = self.stmt.strip('\n').splitlines()
+            if not stmts:
+                lines = [line + [self._null]]
+            else:
+                iter_stmts = iter(stmts)
+                lines = [line + [next(iter_stmts)]]
+                for stmt in iter_stmts:
+                    lines.append([self._null] * len(line) + [stmt])
+        elif callable(self.stmt) and hasattr(self.stmt, '__name__'):
+            lines = [line + [self.stmt.__name__ + '()']]
+        else:
+            lines = [line + [self._null]]
+
+        return lines
 
 
 class ComparisonResults:
@@ -330,9 +333,9 @@ class ComparisonResults:
         else:
             results = self._results
 
-        header = ['Idx', 'Stmt', *(stat.title() for stat in _stats)]
+        header = ['Idx', *(stat.title() for stat in _stats), 'Stmt']
         if sort_by is not None:
-            i = 2 + _stats.index(sort_by)
+            i = 1 + _stats.index(sort_by)
             header[i] += ' ↓' if not reverse else ' ↑'
 
             results_sort, results_none = [], []
@@ -344,7 +347,7 @@ class ComparisonResults:
             results = results_sort + results_none
 
         header_cols = [1] * len(header)
-        for i, stat in enumerate(_stats, 2):
+        for i, stat in enumerate(_stats, 1):
             if stat in percentage:
                 header_cols[i] = 3
 
@@ -355,11 +358,12 @@ class ComparisonResults:
                 if value is not None and value > max_value[stat]:
                     max_value[stat] = value
 
-        # merge min and max cells
-        header[4] = f'{header[4]} - {header.pop(5)}'
-        header_cols[4] += header_cols.pop(5)
+        body = []
+        for result in results:
+            body.extend(result._get_line(precision, max_value))
 
-        body = [result._get_line(precision, max_value) for result in results]
+        body_aligns = ['c'] * sum(header_cols)
+        body_aligns[-1] = 'l'
 
         note = (f"{self.repeat} run{'s' if self.repeat != 1 else ''}, "
                 f"{self.number} loop{'s' if self.number != 1 else ''} each, "
@@ -369,16 +373,19 @@ class ComparisonResults:
                 '\n*: Marked results are likely unreliable as the worst '
                 'time was more than four times slower than the best time.')
 
-        table = _table(title, header, header_cols, body, note)
+        table = _table(title, header, header_cols, body, body_aligns, note)
         if self.unreliable:
             # mark unreliable tips in red
             table = table.splitlines(keepends=True)
             i = 3
-            while table[i][0] != '├':
+            while table[i][0] != '─':
                 i += 1
-            for i, result in enumerate(results, i + 1):
-                if result.unreliable:
-                    table[i] = table[i].replace('*', '\x1b[31m*\x1b[0m', 1)
+            i += 1
+            while table[i][0] != '─':
+                line = table[i]
+                if line.split(None, 1)[0][-1] == '*':
+                    table[i] = line.replace('*', '\x1b[31m*\x1b[0m', 1)
+                i += 1
             i = -1
             while table[i][0] != '*':
                 i -= 1
@@ -597,65 +604,59 @@ def _wrap(text, width):
     return result
 
 
-def _table(title, header, header_cols, body, note):
+def _table(title, header, header_cols, body, body_aligns, note):
     """Internal function."""
     title = 'Table. ' + title
 
-    body_width = [2] * sum(header_cols)
-    for i, item in enumerate(zip(*body)):
-        body_width[i] += max(map(len, item))
+    if body:
+        body_width = [max(map(len, col)) for col in zip(*body)]
 
-    header_width = []
-    i = 0
-    for s, col in zip(header, header_cols):
-        hw = len(s) + 2
-        if col == 1:
-            bw = body_width[i]
-            if hw > bw:
-                body_width[i] = hw
-        else:
-            bw = sum(body_width[i: i + col]) + col - 1
-            if hw > bw:
-                dw = hw - bw
-                q, r = divmod(dw, col)
-                for j in range(i, i + col):
-                    body_width[j] += q
-                for j in range(i, i + r):
-                    body_width[j] += 1
-        if hw < bw:
-            hw = bw
-        header_width.append(hw)
-        i += col
+        header_width = []
+        i = 0
+        for h, hc in zip(header, header_cols):
+            hw = len(h)
+            if hc == 1:
+                bw = body_width[i]
+                if hw > bw:
+                    body_width[i] = hw
+            else:
+                bw = sum(body_width[i: i + hc]) + 3 * (hc - 1)
+                if hw > bw:
+                    dw = hw - bw
+                    q, r = divmod(dw, hc)
+                    for j in range(i, i + hc):
+                        body_width[j] += q
+                    for j in range(i, i + r):
+                        body_width[j] += 1
+            if hw < bw:
+                hw = bw
+            header_width.append(hw)
+            i += hc
+    else:
+        body_width = []
+        header_width = [len(h) for h in header]
 
-    table_width = sum(header_width) + len(header_width) + 1
+    table_width = sum(header_width) + 3 * (len(header_width) - 1) + 2 * 2
     title = _wrap(title, table_width)
     note = _wrap(note, table_width)
 
     title_line = f'{{:^{table_width}}}'
-    header_line = f"│{'│'.join(f'{{:^{hw}}}' for hw in header_width)}│"
-    body_line = f"│{'│'.join(f'{{:^{bw}}}' for bw in body_width)}│"
+    header_line = f"  {'   '.join(f'{{:^{hw}}}' for hw in header_width)}  "
+    aligns = {'l': '<', 'r': '>', 'c': '^'}
+    body_line = '   '.join(
+        f'{{:{aligns[ba]}{bw}}}' for ba, bw in zip(body_aligns, body_width))
+    body_line = f'  {body_line}  '
     note_line = f'{{:<{table_width}}}'
-
-    top_border = f"╭{'┬'.join('─' * hw for hw in header_width)}╮"
-    bottom_border = f"╰{'┴'.join('─' * bw for bw in body_width)}╯"
-    split_border = []
-    bw = iter(body_width)
-    for col in header_cols:
-        if col == 1:
-            border = '─' * next(bw)
-        else:
-            border = '┬'.join('─' * next(bw) for _ in range(col))
-        split_border.append(border)
-    split_border = f"├{'┼'.join(split_border)}┤"
+    border = '─' * table_width
 
     template = '\n'.join(
         (
             *(title_line,) * len(title),
-            top_border,
+            border,
             header_line,
-            split_border,
+            border,
             *(body_line,) * len(body),
-            bottom_border,
+            border,
             *(note_line,) * len(note)
         )
     )
