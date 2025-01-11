@@ -25,7 +25,7 @@ def main(args=None):
              "--stmt.")
     parse.add_argument(
         '-r', '--repeat', type=int, default=7,
-        help='how many times to repeat the timer (default: 7).')
+        help='how many times to repeat the timers (default: 7).')
     parse.add_argument(
         '-n', '--number', type=int, default=0,
         help='how many times to execute statement (default: estimated by '
@@ -36,6 +36,9 @@ def main(args=None):
              'used to estimate a -n so that the total execution time (in '
              'seconds) of all statements is approximately equal to this value '
              '(default: 1.5).')
+    parse.add_argument(
+        '-w', '--warmups', type=int, default=1,
+        help='how many times to warm up the timers (default: 1).')
     parse.add_argument(
         '--no-progress', action='store_true', help='no progress bar.')
     parse.add_argument(
@@ -65,7 +68,7 @@ def main(args=None):
     for a in args:
         if a in ('-', '--stmt'):
             stmt = next(iter_stmts)
-            timers.append([stmt, None])
+            timers.append([stmt, None, None])
         elif a in ('-s', '--setup'):
             s = next(iter_setup)
             if not timers:
@@ -92,11 +95,13 @@ def main(args=None):
             repeat=pargs.repeat,
             number=pargs.number,
             total_time=pargs.total_time,
+            warmups=pargs.warmups,
             show_progress=not pargs.no_progress,
             sort_by=pargs.sort_by if not pargs.no_sort else None,
             reverse=pargs.reverse,
             precision=pargs.precision,
             percentage=pargs.percentage,
+            file=None
         )
 
     except:

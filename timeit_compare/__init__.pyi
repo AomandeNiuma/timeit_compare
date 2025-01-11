@@ -1,5 +1,5 @@
 from typing_extensions import TypeAlias, Union, Callable, Any, Literal, Dict, \
-    List, Optional, Iterable, Tuple
+    List, TextIO, Optional, Iterable, Tuple
 
 __all__ = ['TimeitResult', 'ComparisonResults', 'compare', 'cmp']
 
@@ -27,7 +27,7 @@ class TimeitResult:
 
     def __str__(self) -> str: ...
 
-    def print(self, precision: int = 2) -> None: ...
+    def print(self, precision: int = 2, file: TextIO = None) -> None: ...
 
 
 class ComparisonResults:
@@ -51,8 +51,8 @@ class ComparisonResults:
 
     def print(self, sort_by: Optional[_Stat] = 'mean', reverse: bool = False,
               precision: int = 2, percentage: Iterable[_Stat] = None,
-              include: Iterable[int] = None, exclude: Iterable[int] = None) \
-            -> None: ...
+              include: Iterable[int] = None, exclude: Iterable[int] = None,
+              file: TextIO = None) -> None: ...
 
 
 def compare(
@@ -67,6 +67,7 @@ def compare(
         repeat: int = 7,
         number: int = 0,
         total_time: float = 1.5,
+        warmups: int = 1,
         show_progress: bool = False
 ) -> ComparisonResults: ...
 
@@ -83,9 +84,11 @@ def cmp(
         repeat: int = 7,
         number: int = 0,
         total_time: float = 1.5,
+        warmups: int = 1,
         show_progress: bool = True,
         sort_by: Optional[_Stat] = 'mean',
         reverse: bool = False,
         precision: int = 2,
-        percentage: Iterable[_Stat] = None
+        percentage: Iterable[_Stat] = None,
+        file: TextIO = None
 ) -> None: ...

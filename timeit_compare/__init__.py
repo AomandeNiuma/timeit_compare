@@ -5,13 +5,14 @@ Python quick usage:
     from timeit_compare import cmp
 
     cmp(*timers[, setup][, globals][, repeat][, number][, total_time]
-        [, show_progress][, sort_by][, reverse][, precision][, percentage])
+        [, warmups][, show_progress][, sort_by][, reverse][, precision]
+        [, percentage][, file])
 
 See the function cmp.
 
 Command line usage:
     python -m timeit_compare [-h] [-v] [- STMT [STMT ...]] [-s [SETUP ...]]
-        [-r REPEAT] [-n NUMBER] [-t TOTAL_TIME] [--no-progress]
+        [-r REPEAT] [-n NUMBER] [-t TOTAL_TIME] [-w WARMUPS] [--no-progress]
         [--sort-by {mean,median,min,max,stdev}] [--no-sort] [--reverse]
         [-p PRECISION] [--percentage [{mean,median,min,max,stdev} ...]]
 
@@ -25,7 +26,7 @@ from timeit import Timer
 
 # python >= 3.6
 
-__version__ = '1.4.1'
+__version__ = '1.4.2'
 
 __all__ = ['TimeitResult', 'ComparisonResults', 'compare', 'cmp']
 
@@ -94,11 +95,13 @@ class TimeitResult:
     def __str__(self):
         return self._table(2)
 
-    def print(self, precision=2):
+    def print(self, precision=2, file=None):
         """
         Print the result in tabular form.
         :param precision: digits precision of the result, ranging from 1 to 8
             (default: 2).
+        :param file: prints the results to a stream (default: the current
+            sys.stdout)
         """
         if not isinstance(precision, int):
             raise TypeError(f'precision must be a integer, not '
@@ -107,7 +110,16 @@ class TimeitResult:
             precision = 1
         elif precision > 8:
             precision = 8
-        print(self._table(precision))
+
+        if file is not None:
+            if not hasattr(file, 'write'):
+                raise AttributeError(f"{type(file).__name__!r} object has no "
+                                     f"attribute 'write'")
+            if not callable(getattr(file, 'write')):
+                raise TypeError("The 'write' method of the file must be "
+                                "callable")
+
+        print(self._table(precision), file=file)
 
     def _table(self, precision):
         """Internal function."""
@@ -115,8 +127,8 @@ class TimeitResult:
         header = ['Idx', *(stat.title() for stat in _stats), 'Stmt']
         header_cols = [1] * len(header)
         body = self._get_line(precision, {})
-        body_aligns = ['c'] * sum(header_cols)
-        body_aligns[-1] = 'l'
+        body_aligns = ['^'] * sum(header_cols)
+        body_aligns[-1] = '<'
         note = (f"{self.repeat} run{'s' if self.repeat != 1 else ''}, "
                 f"{self.number} loop{'s' if self.number != 1 else ''} each, "
                 f"total time {self.total_time:#.4g}s")
@@ -127,21 +139,16 @@ class TimeitResult:
         table = _table(title, header, header_cols, body, body_aligns, note)
         if self.unreliable:
             # mark unreliable tips in red
-            table = table.splitlines(keepends=True)
-            i = 3
-            while table[i][0] != '─':
-                i += 1
-            i += 1
-            table[i] = table[i].replace('*', '\x1b[31m*\x1b[0m', 1)
-            i = -1
-            while table[i][0] != '*':
-                i -= 1
-            table[i] = '\x1b[31m' + table[i]
-            table[-1] += '\x1b[0m'
-            table = ''.join(table)
+            colour_red = '\x1b[34m'
+            colour_reset = '\x1b0m'
+            table = table.splitlines()
+            i = next(i for i in itertools.count(4) if table[i][1] == '─') + 1
+            table[i] = table[i].replace('*', f'{colour_red}*{colour_reset}', 1)
+            i = next(i for i in itertools.count(-2, -1) if table[i][1] == '*')
+            table[i] = colour_red + table[i]
+            table[-2] = table[-2] + colour_reset
+            table = '\n'.join(table)
         return table
-
-    _null = '-'
 
     def _get_line(self, precision, max_value):
         """Internal function."""
@@ -183,25 +190,30 @@ class TimeitResult:
                     line.append(key_progress)
 
             else:
-                line.append(self._null)
+                line.append('-')
 
                 if stat in max_value:
-                    line.append(self._null)
-                    line.append(self._null)
+                    line.append('-')
+                    line.append('-')
 
         if isinstance(self.stmt, str):
-            stmts = self.stmt.strip('\n').splitlines()
+            stmts = self.stmt.splitlines()
+            # remove the blank line before and after the statement
+            while stmts and (not stmts[0] or stmts[0].isspace()):
+                stmts.pop(0)
+            while stmts and (not stmts[-1] or stmts[-1].isspace()):
+                stmts.pop()
             if not stmts:
-                lines = [line + [self._null]]
+                lines = [line + ['']]
             else:
                 iter_stmts = iter(stmts)
                 lines = [line + [next(iter_stmts)]]
                 for stmt in iter_stmts:
-                    lines.append([self._null] * len(line) + [stmt])
+                    lines.append([''] * len(line) + [stmt])
         elif callable(self.stmt) and hasattr(self.stmt, '__name__'):
             lines = [line + [self.stmt.__name__ + '()']]
         else:
-            lines = [line + [self._null]]
+            lines = [line + ['']]
 
         return lines
 
@@ -249,7 +261,7 @@ class ComparisonResults:
         return self._table('mean', False, 2, {'mean'}, None, None)
 
     def print(self, sort_by='mean', reverse=False, precision=2, percentage=None,
-              include=None, exclude=None):
+              include=None, exclude=None, file=None):
         """
         Print the results in tabular form.
         :param sort_by: statistic for sorting the results (default: 'mean'). If
@@ -264,14 +276,16 @@ class ComparisonResults:
             results).
         :param exclude: indices of the excluded results (default: no results
             excluded).
+        :param file: prints the results to a stream (default: the current
+            sys.stdout)
         """
-        args = self._check_print_args(
-            sort_by, reverse, precision, percentage, include, exclude)
-        print(self._table(*args))
+        args = self._check_print_args(sort_by, reverse, precision, percentage,
+                                      include, exclude, file)
+        return self._print(args)
 
     @staticmethod
     def _check_print_args(sort_by, reverse, precision, percentage, include,
-                          exclude):
+                          exclude, file):
         """Internal function."""
         if sort_by is not None:
             sort_by = ComparisonResults._check_stat(sort_by, 'sort_by')
@@ -305,7 +319,15 @@ class ComparisonResults:
         elif exclude is not None:
             exclude = set(exclude)
 
-        return sort_by, reverse, precision, percentage, include, exclude
+        if file is not None:
+            if not hasattr(file, 'write'):
+                raise AttributeError(f"{type(file).__name__!r} object has no "
+                                     f"attribute 'write'")
+            if not callable(getattr(file, 'write')):
+                raise TypeError("The 'write' method of the file must be "
+                                "callable")
+
+        return sort_by, reverse, precision, percentage, include, exclude, file
 
     @staticmethod
     def _check_stat(stat, subject):
@@ -320,16 +342,21 @@ class ComparisonResults:
                 f"{', '.join(_stats[:-1])}, or {_stats[-1]}")
         return stat
 
-    def _table(self, sort_by, reverse, precision, percentage, include,
-               exclude):
+    def _print(self, args):
+        """Internal function."""
+        table_args, file = args[:-1], args[-1]
+        print(self._table(*table_args), file=file)
+
+    def _table(self, sort_by, reverse, precision, percentage, include, exclude):
         """Internal function."""
         title = 'Comparison Results (unit: s)'
 
         if include is not None:
-            results = [self._results[i] for i in include]
+            results = [result for result in self._results
+                       if result.index in include]
         elif exclude is not None:
-            results = [result for i, result in enumerate(self._results)
-                       if i not in exclude]
+            results = [result for result in self._results
+                       if result.index not in exclude]
         else:
             results = self._results
 
@@ -359,11 +386,14 @@ class ComparisonResults:
                     max_value[stat] = value
 
         body = []
+        body_rows = []
         for result in results:
-            body.extend(result._get_line(precision, max_value))
+            lines = result._get_line(precision, max_value)
+            body.extend(lines)
+            body_rows.append(len(lines))
 
-        body_aligns = ['c'] * sum(header_cols)
-        body_aligns[-1] = 'l'
+        body_aligns = ['^'] * sum(header_cols)
+        body_aligns[-1] = '<'
 
         note = (f"{self.repeat} run{'s' if self.repeat != 1 else ''}, "
                 f"{self.number} loop{'s' if self.number != 1 else ''} each, "
@@ -374,24 +404,26 @@ class ComparisonResults:
                 'time was more than four times slower than the best time.')
 
         table = _table(title, header, header_cols, body, body_aligns, note)
+
         if self.unreliable:
             # mark unreliable tips in red
-            table = table.splitlines(keepends=True)
-            i = 3
-            while table[i][0] != '─':
-                i += 1
-            i += 1
-            while table[i][0] != '─':
-                line = table[i]
-                if line.split(None, 1)[0][-1] == '*':
-                    table[i] = line.replace('*', '\x1b[31m*\x1b[0m', 1)
-                i += 1
-            i = -1
-            while table[i][0] != '*':
-                i -= 1
-            table[i] = '\x1b[31m' + table[i]
-            table[-1] += '\x1b[0m'
-            table = ''.join(table)
+            colour_red = '\x1b[31m'
+            colour_reset = '\x1b[0m'
+
+            table = table.splitlines()
+
+            i = next(i for i in itertools.count(4) if table[i][1] == '─') + 1
+            for result, row in zip(results, body_rows):
+                if result.unreliable:
+                    table[i] = table[i].replace(
+                        '*', f'{colour_red}*{colour_reset}', 1)
+                i += row
+
+            i = next(i for i in itertools.count(-2, -1) if table[i][1] == '*')
+            table[i] = colour_red + table[i]
+            table[-2] = table[-2] + colour_reset
+
+            table = '\n'.join(table)
 
         return table
 
@@ -416,7 +448,7 @@ class _Timer(Timer):
 
 
 def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
-            total_time=1.5, show_progress=False):
+            total_time=1.5, warmups=1, show_progress=False):
     """
     Measure the execution times of multiple statements and return comparison
     results.
@@ -425,13 +457,14 @@ def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
     :param globals: default globals for timeit.Timer (default: global namespace
         seen by the caller's frame, if this is not possible, it defaults to {},
         specify globals=globals() or setup instead).
-    :param repeat: how many times to repeat the timer (default: 7).
+    :param repeat: how many times to repeat the timers (default: 7).
     :param number: how many times to execute statement (default: estimated by
         total_time).
     :param total_time: if specified and no number greater than 0 is specified,
         it will be used to estimate a number so that the total execution time
         (in seconds) of all statements is approximately equal to this value
         (default: 1.5).
+    :param warmups: how many times to warm up the timers (default: 1).
     :param show_progress: whether to show a progress bar (default: False).
     :return: A ComparisonResults type object.
     """
@@ -452,6 +485,12 @@ def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
                         f'{type(total_time).__name__!r}')
     if total_time < 0.0:
         total_time = 0.0
+
+    if not isinstance(warmups, int):
+        raise TypeError(f'warmups must be a integer, not '
+                        f'{type(warmups).__name__!r}')
+    if warmups < 0:
+        warmups = 0
 
     show_progress = bool(show_progress)
 
@@ -479,6 +518,10 @@ def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
 
     if show_progress:
         print('timing now...')
+
+    if warmups > 0:
+        for timer in all_timers:
+            timer.timeit(warmups)
 
     if number <= 0 and all_timers:
         # estimate number with total_time
@@ -524,8 +567,8 @@ def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
 
 
 def cmp(*timers, setup='pass', globals=None, repeat=7, number=0, total_time=1.5,
-        show_progress=True, sort_by='mean', reverse=False, precision=2,
-        percentage=None):
+        warmups=1, show_progress=True, sort_by='mean', reverse=False,
+        precision=2, percentage=None, file=None):
     """
     Convenience function to call compare function and print the results.
     See compare function and ComparisonResults.print methods for parameters.
@@ -542,7 +585,7 @@ def cmp(*timers, setup='pass', globals=None, repeat=7, number=0, total_time=1.5,
     # avoid wasting time in case an error caused by the arguments occurs after
     # the timers have finished running
     print_args = ComparisonResults._check_print_args(
-        sort_by, reverse, precision, percentage, include=None, exclude=None
+        sort_by, reverse, precision, percentage, None, None, file
     )
 
     results = compare(
@@ -552,10 +595,11 @@ def cmp(*timers, setup='pass', globals=None, repeat=7, number=0, total_time=1.5,
         repeat=repeat,
         number=number,
         total_time=total_time,
+        warmups=warmups,
         show_progress=show_progress
     )
 
-    print(results._table(*print_args))
+    results._print(print_args)
 
 
 _BLOCK = ' ▏▎▍▌▋▊▉█'
@@ -586,7 +630,7 @@ def _wrap(text, width):
     """Internal function."""
     result = []
     for line in text.splitlines():
-        line = line.rstrip(' ')
+        line = line.strip(' ')
         if not line:
             result.append('')
             continue
@@ -594,10 +638,8 @@ def _wrap(text, width):
             if len(line) <= width:
                 result.append(line)
                 break
-            for split in range(width, -1, -1):
-                if line[split] == ' ':
-                    break
-            else:
+            split = line.rfind(' ', 0, width + 1)
+            if split == -1:
                 split = width
             result.append(line[:split].rstrip(' '))
             line = line[split:].lstrip(' ')
@@ -640,24 +682,26 @@ def _table(title, header, header_cols, body, body_aligns, note):
     title = _wrap(title, table_width)
     note = _wrap(note, table_width)
 
-    title_line = f'{{:^{table_width}}}'
-    header_line = f"  {'   '.join(f'{{:^{hw}}}' for hw in header_width)}  "
-    aligns = {'l': '<', 'r': '>', 'c': '^'}
+    blank_line = ' ' * (table_width + 2)
+    title_line = f' {{:^{table_width}}} '
+    header_line = f"   {'   '.join(f'{{:^{hw}}}' for hw in header_width)}   "
     body_line = '   '.join(
-        f'{{:{aligns[ba]}{bw}}}' for ba, bw in zip(body_aligns, body_width))
-    body_line = f'  {body_line}  '
-    note_line = f'{{:<{table_width}}}'
-    border = '─' * table_width
+        f'{{:{ba}{bw}}}' for ba, bw in zip(body_aligns, body_width))
+    body_line = f'   {body_line}   '
+    note_line = f' {{:<{table_width}}} '
+    border = f" {'─' * table_width} "
 
     template = '\n'.join(
         (
+            blank_line,
             *(title_line,) * len(title),
             border,
             header_line,
             border,
             *(body_line,) * len(body),
             border,
-            *(note_line,) * len(note)
+            *(note_line,) * len(note),
+            blank_line
         )
     )
 
