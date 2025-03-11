@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "timeit_compare"
+version = "1.4.3"
+description = "Conveniently measure and compare the execution times of multiple statements."
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.6.0"
+authors = [
+    { name = "Liu Wei", email = "23S112099@stu.hit.edu.cn" }
+]
+maintainers = [
+    { name = "Liu Wei", email = "23S112099@stu.hit.edu.cn" }
+]
+license = { file = "LICENSE" }
+keywords = ["timeit_compare", "timeit", "performance"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "typing_extensions"
+]
+
+[project.urls]
+Homepage = "https://github.com/AomandeNiuma/timeit_compare"

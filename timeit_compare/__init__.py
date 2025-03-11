@@ -15,6 +15,7 @@ Command line usage:
         [-r REPEAT] [-n NUMBER] [-t TOTAL_TIME] [-w WARMUPS] [--no-progress]
         [--sort-by {mean,median,min,max,stdev}] [--no-sort] [--reverse]
         [-p PRECISION] [--percentage [{mean,median,min,max,stdev} ...]]
+        [-f FILE]
 
 Run 'python -m timeit_compare -h' for command line help.
 """
@@ -26,7 +27,7 @@ from timeit import Timer
 
 # python >= 3.6
 
-__version__ = '1.4.2'
+__version__ = '1.4.3'
 
 __all__ = ['TimeitResult', 'ComparisonResults', 'compare', 'cmp']
 
@@ -139,14 +140,15 @@ class TimeitResult:
         table = _table(title, header, header_cols, body, body_aligns, note)
         if self.unreliable:
             # mark unreliable tips in red
-            colour_red = '\x1b[34m'
-            colour_reset = '\x1b0m'
+            colour_red = '\x1b[31m'
+            colour_reset = '\x1b[0m'
             table = table.splitlines()
             i = next(i for i in itertools.count(4) if table[i][1] == '─') + 1
-            table[i] = table[i].replace('*', f'{colour_red}*{colour_reset}', 1)
+            for j in range(i, i + len(body)):
+                table[j] = f'{colour_red}{table[j]}{colour_reset}'
             i = next(i for i in itertools.count(-2, -1) if table[i][1] == '*')
-            table[i] = colour_red + table[i]
-            table[-2] = table[-2] + colour_reset
+            for j in range(i, -1):
+                table[j] = f'{colour_red}{table[j]}{colour_reset}'
             table = '\n'.join(table)
         return table
 
@@ -204,16 +206,22 @@ class TimeitResult:
             while stmts and (not stmts[-1] or stmts[-1].isspace()):
                 stmts.pop()
             if not stmts:
-                lines = [line + ['']]
+                line.append('')
+                lines = [line]
             else:
-                iter_stmts = iter(stmts)
-                lines = [line + [next(iter_stmts)]]
-                for stmt in iter_stmts:
-                    lines.append([''] * len(line) + [stmt])
+                it = map(repr, stmts)
+                line.append(next(it)[1:-1])
+                lines = [line]
+                for stmt in it:
+                    line = [''] * (len(line) - 1)
+                    line.append(stmt[1:-1])
+                    lines.append(line)
         elif callable(self.stmt) and hasattr(self.stmt, '__name__'):
-            lines = [line + [self.stmt.__name__ + '()']]
+            line.append(self.stmt.__name__ + '()')
+            lines = [line]
         else:
-            lines = [line + ['']]
+            line.append('')
+            lines = [line]
 
         return lines
 
@@ -279,13 +287,15 @@ class ComparisonResults:
         :param file: prints the results to a stream (default: the current
             sys.stdout)
         """
-        args = self._check_print_args(sort_by, reverse, precision, percentage,
-                                      include, exclude, file)
+        args = self._check_print_args(
+            sort_by, reverse, precision, percentage, include, exclude, file,
+            len(self._results)
+        )
         return self._print(args)
 
     @staticmethod
     def _check_print_args(sort_by, reverse, precision, percentage, include,
-                          exclude, file):
+                          exclude, file, _result_num):
         """Internal function."""
         if sort_by is not None:
             sort_by = ComparisonResults._check_stat(sort_by, 'sort_by')
@@ -316,8 +326,18 @@ class ComparisonResults:
                              'simultaneously')
         if include is not None:
             include = set(include)
+            for index in include:
+                if not isinstance(index, int):
+                    raise TypeError(f'timer index must be a integer, not '
+                                    f'{type(index).__name__!r}')
+                elif not 0 <= index < _result_num:
+                    raise IndexError('timer index out of range')
         elif exclude is not None:
             exclude = set(exclude)
+            for index in exclude:
+                if not isinstance(index, int):
+                    raise TypeError(f'timer index must be a integer, not '
+                                    f'{type(index).__name__!r}')
 
         if file is not None:
             if not hasattr(file, 'write'):
@@ -349,16 +369,21 @@ class ComparisonResults:
 
     def _table(self, sort_by, reverse, precision, percentage, include, exclude):
         """Internal function."""
-        title = 'Comparison Results (unit: s)'
-
-        if include is not None:
-            results = [result for result in self._results
-                       if result.index in include]
-        elif exclude is not None:
-            results = [result for result in self._results
-                       if result.index not in exclude]
-        else:
+        if include is None and exclude is None:
             results = self._results
+            total_time = self.total_time
+            unreliable = self.unreliable
+        else:
+            if include is not None:
+                results = [result for result in self._results
+                           if result.index in include]
+            else:
+                results = [result for result in self._results
+                           if result.index not in exclude]
+            total_time = sum(result.total_time for result in results)
+            unreliable = any(result.unreliable for result in results)
+
+        title = 'Comparison Results (unit: s)'
 
         header = ['Idx', *(stat.title() for stat in _stats), 'Stmt']
         if sort_by is not None:
@@ -397,15 +422,15 @@ class ComparisonResults:
 
         note = (f"{self.repeat} run{'s' if self.repeat != 1 else ''}, "
                 f"{self.number} loop{'s' if self.number != 1 else ''} each, "
-                f"total time {self.total_time:#.4g}s")
-        if self.unreliable:
+                f"total time {total_time:#.4g}s")
+        if unreliable:
             note += (
                 '\n*: Marked results are likely unreliable as the worst '
                 'time was more than four times slower than the best time.')
 
         table = _table(title, header, header_cols, body, body_aligns, note)
 
-        if self.unreliable:
+        if unreliable:
             # mark unreliable tips in red
             colour_red = '\x1b[31m'
             colour_reset = '\x1b[0m'
@@ -415,13 +440,13 @@ class ComparisonResults:
             i = next(i for i in itertools.count(4) if table[i][1] == '─') + 1
             for result, row in zip(results, body_rows):
                 if result.unreliable:
-                    table[i] = table[i].replace(
-                        '*', f'{colour_red}*{colour_reset}', 1)
+                    for j in range(i, i + row):
+                        table[j] = f'{colour_red}{table[j]}{colour_reset}'
                 i += row
 
             i = next(i for i in itertools.count(-2, -1) if table[i][1] == '*')
-            table[i] = colour_red + table[i]
-            table[-2] = table[-2] + colour_reset
+            for j in range(i, -1):
+                table[j] = f'{colour_red}{table[j]}{colour_reset}'
 
             table = '\n'.join(table)
 
@@ -529,30 +554,21 @@ def compare(*timers, setup='pass', globals=None, repeat=7, number=0,
         while True:
             t = sum([timer.timeit(n) for timer in all_timers])
             if t > 0.2:
-                number = max(round(n * total_time / t / repeat), 1)
                 break
             n = int(n * 0.25 / t) + 1 if t else n * 2
+        number = max(round(n * total_time / t / repeat), 1)
 
     if show_progress:
-        def _progress(task_num):
-            for i in range(task_num + 1):
-                percent = i / task_num if task_num else 1.0
-                progress = (f'\r|{_progress_bar(percent, 12)}| '
-                            f'{i}/{task_num} completed')
-                print(progress, end='', flush=True)
-                yield
+        progress = _progress(len(all_timers) * repeat, 12)
+        next(progress)
 
-        progress = _progress(len(all_timers) * repeat)
-    else:
-        progress = itertools.repeat(None)
-
-    next(progress)
     for _ in range(repeat):
         for timer in all_timers:
             t = timer.timeit(number)
             timer.times.append(t / number)
             timer.total_time += t
-            next(progress)
+            if show_progress:
+                next(progress)
 
     if show_progress:
         print()
@@ -585,7 +601,7 @@ def cmp(*timers, setup='pass', globals=None, repeat=7, number=0, total_time=1.5,
     # avoid wasting time in case an error caused by the arguments occurs after
     # the timers have finished running
     print_args = ComparisonResults._check_print_args(
-        sort_by, reverse, precision, percentage, None, None, file
+        sort_by, reverse, precision, percentage, None, None, file, None
     )
 
     results = compare(
@@ -624,6 +640,19 @@ def _progress_bar(progress, length):
         string = f'{full}{half_full}{empty}'
 
     return string
+
+
+def _progress(task_num, length):
+    """Internal function."""
+    for i in range(task_num + 1):
+        template = (f'\r|{{progress_bar}}| '
+                    f'{{completed_num}}/{task_num} completed')
+        percent = i / task_num if task_num else 1.0
+        progress = template.format(
+            progress_bar=_progress_bar(percent, length),
+            completed_num=i)
+        print(progress, end='', flush=True)
+        yield
 
 
 def _wrap(text, width):

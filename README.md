@@ -2,7 +2,7 @@
 
 Conveniently measure and compare the execution times of multiple statements.
 
-------------------------------
+---
 
 ## Installation
 
@@ -12,7 +12,7 @@ To install the package, run the following command:
 pip install timeit_compare
 ```
 
-------------------------------
+---
 
 ## Usage
 

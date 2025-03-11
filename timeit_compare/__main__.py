@@ -56,6 +56,11 @@ def main(args=None):
     parse.add_argument(
         '--percentage', choices=_stats, nargs='*', default=None,
         help='statistics showing percentage (default: same as --sort-by).')
+    parse.add_argument(
+        '-f', '--file', type=argparse.FileType('w', encoding='utf-8'),
+        default=None,
+        help='prints the results to a stream (default: the current sys.stdout)'
+    )
 
     if args is None:
         args = sys.argv[1:]
@@ -101,7 +106,7 @@ def main(args=None):
             reverse=pargs.reverse,
             precision=pargs.precision,
             percentage=pargs.percentage,
-            file=None
+            file=pargs.file
         )
 
     except:
