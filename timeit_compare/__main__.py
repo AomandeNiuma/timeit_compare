@@ -15,47 +15,46 @@ def main(args=None):
     parse.add_argument(
         '-', '--stmt', nargs='+', action='append', default=[],
         help='statement to be timed. A multi-line statement can be given by '
-             'passing multiple strings simultaneously in an argument.')
+             'passing multiple strings simultaneously in an argument')
     parse.add_argument(
         '-s', '--setup', nargs='*', action='append', default=[],
         help="statement to be executed once initially for the last --stmt "
              "argument, if there are no --stmt arguments before this, it "
              "indicates the default setup statement for all --stmt (default: "
              "'pass'). A multi-line statement is processed in the same way as "
-             "--stmt.")
+             "--stmt")
     parse.add_argument(
         '-r', '--repeat', type=int, default=7,
-        help='how many times to repeat the timers (default: 7).')
+        help='how many times to repeat the timers (default: 7)')
     parse.add_argument(
         '-n', '--number', type=int, default=0,
-        help='how many times to execute statement (default: estimated by '
-             '-t).')
+        help='how many times to execute statement (default: estimated by -t)')
     parse.add_argument(
         '-t', '--total-time', type=float, default=1.5,
         help='if specified and no -n greater than 0 is specified, it will be '
              'used to estimate a -n so that the total execution time (in '
              'seconds) of all statements is approximately equal to this value '
-             '(default: 1.5).')
+             '(default: 1.5)')
     parse.add_argument(
         '-w', '--warmups', type=int, default=1,
-        help='how many times to warm up the timers (default: 1).')
+        help='how many times to warm up the timers (default: 1)')
     parse.add_argument(
-        '--no-progress', action='store_true', help='no progress bar.')
+        '--no-progress', action='store_true', help='no progress bar')
     parse.add_argument(
         '--sort-by', choices=_stats, default='mean',
-        help="statistic for sorting the results (default: 'mean').")
+        help="statistic for sorting the results (default: 'mean')")
     parse.add_argument(
-        '--no-sort', action='store_true', help='do not sort the results.')
+        '--no-sort', action='store_true', help='do not sort the results')
     parse.add_argument(
         '--reverse', action='store_true',
-        help='sort the results in descending order.')
+        help='sort the results in descending order')
     parse.add_argument(
         '-p', '--precision', type=int, default=2,
         help='digits precision of the results, ranging from 1 to 8 (default: '
-             '2).')
+             '2)')
     parse.add_argument(
         '--percentage', choices=_stats, nargs='*', default=None,
-        help='statistics showing percentage (default: same as --sort-by).')
+        help='statistics showing percentage (default: same as --sort-by)')
     parse.add_argument(
         '-f', '--file', type=argparse.FileType('w', encoding='utf-8'),
         default=None,
